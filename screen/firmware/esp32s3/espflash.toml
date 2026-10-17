@@ -1,0 +1,3 @@
+# espflash picks this up: flash the data partition layout along with the app.
+[idf_format_args]
+partition_table = "partitions.csv"

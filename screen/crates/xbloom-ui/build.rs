@@ -9,9 +9,9 @@ fn main() {
     let config = if mcu {
         // Slint renders SDF glyphs at 2/3 of the largest listed size (capped at 6× the
         // smallest). Font sizes come from the Theme global, which the compiler doesn't count,
-        // so list them: 12…84 px gives 56 px glyphs — crisp from captions up to the 120 px
-        // clock, at ~200 KB per weight.
-        std::env::set_var("SLINT_FONT_SIZES", "12,84");
+        // so list a range: 12…72 px gives 48 px glyphs — crisp from captions up to the 120 px
+        // clock, at ~150 KB per weight.
+        std::env::set_var("SLINT_FONT_SIZES", "12,72");
         slint_build::CompilerConfiguration::new()
             .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer)
             .with_sdf_fonts(true)

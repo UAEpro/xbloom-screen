@@ -129,6 +129,8 @@ Logs: `journalctl -u xbloom-screen -f`.
    ```bash
    espflash write-bin 0x0 xbloom-screen-esp32s3.bin
    ```
+   The image ends before the data partition, so flashing an update keeps your recipes,
+   history and settings. Don't tick "erase flash" unless you want a factory reset.
 3. On first boot the screen asks for an admin PIN and offers to pair the machine. Then go to
    **Settings → Admin panel**: until it has Wi-Fi credentials, the screen hosts its own
    network called `xBloom-Screen-XXXX`. The password is shown there, together with a QR code

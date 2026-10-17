@@ -59,6 +59,8 @@ jobs:
         with:
           workspaces: screen
       - run: cargo fmt --all --check
+      - name: rustfmt (ESP32 firmware sources)
+        run: rustfmt --check --edition 2021 firmware/esp32s3/src/main.rs
       - run: cargo clippy --workspace --all-targets --features xbloom-ui/screenshot -- -D warnings
       - run: cargo test --workspace
 
@@ -116,10 +118,12 @@ jobs:
         with:
           workspaces: screen/firmware/esp32s3
       - run: cargo build --release --locked
-      - name: Flashable image (bootloader + partition table + app, write at 0x0)
+      # Bootloader + partition table + app in one file to write at 0x0. Unpadded, so flashing
+      # an update stops before the data partition and keeps recipes and settings.
+      - name: Flashable image
         run: |
           OUT=target/xtensa-esp32s3-espidf/release
-          espflash save-image --chip esp32s3 --merge --flash-size 16mb \
+          espflash save-image --chip esp32s3 --merge --skip-padding --flash-size 16mb \
             --bootloader "$OUT/bootloader.bin" --partition-table partitions.csv \
             "$OUT/xbloom-screen-esp32s3" xbloom-screen-esp32s3.bin
           ls -l xbloom-screen-esp32s3.bin
