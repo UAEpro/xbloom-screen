@@ -126,7 +126,7 @@ component Live inherits Rectangle {
                             overflow: elide;
                         }
                         Text {
-                            text: root.waiting ? "Press start on the xBloom to begin." : root.stage == "grinding" ? "Grinding is quiet for ~20 s — that's normal."
+                            text: root.waiting ? "Press start on the xBloom to begin." : root.stage == "grinding" ? "Quiet for ~20 s — that's normal."
                                 : root.preparing ? "Talking to the machine…" : AppState.brew.stages.length > 0 ? AppState.brew.stages[AppState.brew.stage-index] + " · " + (AppState.brew.stage-index + 1) + " of " + AppState.brew.stages.length : "";
                             color: Theme.text-2;
                             font-size: Theme.fs-small;

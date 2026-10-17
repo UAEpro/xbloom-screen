@@ -115,12 +115,23 @@ export component SetupPage inherits Rectangle {
                 VerticalLayout {
                     padding: 16px;
                     spacing: 8px;
-                    if AppState.link == LinkState.connected: HorizontalLayout {
-                        spacing: 12px;
-                        height: 64px;
-                        Icon { y: (parent.height - self.height) / 2; source: Icons.check-circle; tint: Theme.success; width: 28px; height: 28px; }
-                        Text { text: "Connected to " + AppState.machine-name; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
-                        Button { y: (parent.height - self.height) / 2; text: "Continue"; clicked => { AppState.setup-step = 3; } }
+                    if AppState.link == LinkState.connected: VerticalLayout {
+                        spacing: 10px;
+                        padding-bottom: 6px;
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Icon { y: (parent.height - self.height) / 2; source: Icons.check-circle; tint: Theme.success; width: 26px; height: 26px; }
+                            Text {
+                                text: "Connected to " + AppState.machine-name;
+                                color: Theme.text;
+                                font-size: Theme.fs-h2;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                        }
+                        Button { text: "Continue"; has-icon: true; icon: Icons.next; clicked => { AppState.setup-step = 3; } }
                     }
                     if AppState.scan-results.length == 0 && AppState.link != LinkState.connected: Text {
                         text: AppState.scanning ? "Looking for machines nearby…" : "No machines found yet.";
@@ -130,7 +141,7 @@ export component SetupPage inherits Rectangle {
                         vertical-alignment: center;
                         vertical-stretch: 1;
                     }
-                    for d in AppState.scan-results: Rectangle {
+                    for d in AppState.link == LinkState.connected ? [] : AppState.scan-results: Rectangle {
                         height: 60px;
                         border-radius: 14px;
                         background: ta.pressed ? Theme.surface-3 : Theme.surface-2;

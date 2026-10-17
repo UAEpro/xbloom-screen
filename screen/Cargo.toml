@@ -4,6 +4,7 @@ members = [
     "crates/xbloom-core",
     "crates/xbloom-app",
     "crates/xbloom-ui",
+    "crates/xbloom-screen",
 ]
 # The ESP32-S3 firmware builds with the Xtensa toolchain (`espup`), so it is its own
 # cargo project that path-depends on the shared crates instead of being a member here.

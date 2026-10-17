@@ -119,30 +119,54 @@ export component HoldButton inherits Rectangle {
     background: tone.transparentize(0.75);
     opacity: enabled ? 1 : 0.5;
 
-    fill := Rectangle {
-        x: 0;
-        width: parent.width * root.progress;
-        height: parent.height;
-        border-radius: Theme.r-btn;
-        background: root.tone;
-    }
-    // Before the fill covers it, the label sits on the light track; once filled, on the accent.
+    // Label on the light track…
     HorizontalLayout {
         alignment: center;
         spacing: 12px;
         Icon {
             y: (parent.height - self.height) / 2;
             source: root.locked ? Icons.lock : Icons.flame;
-            tint: root.progress > 0.45 ? Theme.accent-ink : Theme.accent-strong;
+            tint: Theme.accent-strong;
             width: 24px;
             height: 24px;
         }
         Text {
             text: ta.pressed && !root.fired ? root.holding-text : root.text;
-            color: root.progress > 0.45 ? Theme.accent-ink : Theme.accent-strong;
+            color: Theme.accent-strong;
             font-size: Theme.fs-h2;
             font-weight: 700;
             vertical-alignment: center;
+        }
+    }
+    // …and a white copy inside the fill, clipped to it, so the text stays readable as the
+    // fill sweeps underneath.
+    fill := Rectangle {
+        x: 0;
+        width: parent.width * root.progress;
+        height: parent.height;
+        border-radius: Theme.r-btn;
+        background: root.tone;
+        clip: true;
+        HorizontalLayout {
+            x: 0;
+            width: root.width;
+            height: root.height;
+            alignment: center;
+            spacing: 12px;
+            Icon {
+                y: (parent.height - self.height) / 2;
+                source: root.locked ? Icons.lock : Icons.flame;
+                tint: Theme.accent-ink;
+                width: 24px;
+                height: 24px;
+            }
+            Text {
+                text: ta.pressed && !root.fired ? root.holding-text : root.text;
+                color: Theme.accent-ink;
+                font-size: Theme.fs-h2;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
         }
     }
 

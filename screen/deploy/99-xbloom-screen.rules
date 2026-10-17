@@ -1,0 +1,5 @@
+# Let the "video" group set the display backlight, so xbloom-screen can dim the screen for the
+# screensaver and turn it off at night without running as root.
+SUBSYSTEM=="backlight", ACTION=="add", \
+  RUN+="/bin/chgrp video /sys%p/brightness /sys%p/bl_power", \
+  RUN+="/bin/chmod g+w /sys%p/brightness /sys%p/bl_power"

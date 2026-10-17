@@ -198,7 +198,7 @@ pub fn handle(app: &App, req: &mut dyn HttpRequest) -> Response {
     let segs: Vec<&str> = path.trim_start_matches("/api/").trim_end_matches('/').split('/').collect();
     // Public endpoints.
     match (method, segs.as_slice()) {
-        (Method::Get, ["info"]) => return info(app),
+        (Method::Get, ["info"]) => return info(app, req),
         (Method::Post, ["setup"]) => return setup(app, req),
         (Method::Post, ["login"]) => return login(app, req),
         _ => {}
@@ -480,8 +480,10 @@ impl RecipeBody {
     }
 }
 
-fn info(app: &App) -> Response {
+fn info(app: &App, req: &dyn HttpRequest) -> Response {
     let s = app.settings();
+    // Lets the panel skip straight to the dashboard (or the login) without probing.
+    let authed = session_token(req).is_some_and(|t| app.auth.lock().unwrap().touch_session(&t));
     let storage = app.hooks().storage().map(|(free, total)| json!({"free": free, "total": total}));
     Response::ok(&json!({
         "device_name": s.device_name,
@@ -496,6 +498,7 @@ fn info(app: &App) -> Response {
         "theme": s.appearance.theme,
         "accent": s.appearance.accent,
         "web_locked_s": app.auth.lock().unwrap().locked_for(Channel::Web).map(|d| d.as_secs()),
+        "authed": authed,
     }))
 }
 

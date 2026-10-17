@@ -158,7 +158,7 @@ impl HistoryStore {
         for e in &self.entries {
             let name = e.recipe.replace('"', "\"\"");
             out.push_str(&format!(
-                "{},\"{}\",{},{},{},{},{},{},{},{}\n",
+                "{},\"{}\",{},{},{},{:.1},{:.1},{:.1},{},{}\n",
                 e.ts, name, e.dose_g, e.ratio, e.grind, e.water_g, e.coffee_g, e.duration_s, e.remote_start, e.outcome
             ));
         }
