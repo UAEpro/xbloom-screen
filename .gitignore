@@ -30,3 +30,10 @@ telemetry-*.json
 
 # BLE debug capture logs (contain MAC/serial)
 xbloom-debug-*.log
+
+# xbloom-screen (Rust) build output
+screen/target/
+screen/firmware/*/target/
+screen/firmware/*/.embuild/
+screen/firmware/*/sdkconfig
+screen/firmware/*/sdkconfig.old

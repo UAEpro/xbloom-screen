@@ -1,0 +1,124 @@
+// The machine's A · B · C dial presets: assign three recipes and push them over Bluetooth,
+// then brew straight from the machine's dial with no phone.
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, SlotRow, Overlay } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, Toggle, SectionTitle } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component SlotCard inherits Rectangle {
+    in property <SlotRow> slot;
+    in property <int> index;
+    background: Theme.surface;
+    border-radius: Theme.r-card;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                width: 52px;
+                height: 52px;
+                border-radius: 26px;
+                background: root.slot.recipe-id != "" ? Theme.accent : Theme.surface-2;
+                Text {
+                    text: root.slot.slot;
+                    color: root.slot.recipe-id != "" ? Theme.accent-ink : Theme.text-3;
+                    font-size: Theme.fs-title;
+                    font-weight: 700;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                SectionTitle { text: "SLOT " + root.slot.slot; }
+            }
+        }
+        Text {
+            text: root.slot.recipe-id != "" ? root.slot.recipe : "Not assigned";
+            color: root.slot.recipe-id != "" ? Theme.text : Theme.text-3;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            wrap: word-wrap;
+            max-height: 52px;
+            overflow: elide;
+        }
+        Text {
+            text: root.slot.detail;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            overflow: elide;
+        }
+        Rectangle { vertical-stretch: 1; }
+        HorizontalLayout {
+            spacing: 10px;
+            Text {
+                text: "Scale";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Toggle {
+                checked: root.slot.scale;
+                toggled(v) => { AppState.set-slot-scale(root.index, v); }
+            }
+        }
+        Button {
+            text: root.slot.recipe-id != "" ? "Change" : "Choose recipe";
+            kind: ButtonKind.secondary;
+            clicked => {
+                AppState.picking-slot = root.index;
+                AppState.overlay = Overlay.pick-recipe;
+            }
+        }
+    }
+}
+
+export component PresetsPage inherits Rectangle {
+    VerticalLayout {
+        Header {
+            title: "Dial presets";
+            subtitle: "Brew straight from the machine's A · B · C dial — no phone needed";
+        }
+        HorizontalLayout {
+            vertical-stretch: 1;
+            padding-left: 24px;
+            padding-right: 20px;
+            spacing: 14px;
+            for s[i] in AppState.slots: SlotCard {
+                horizontal-stretch: 1;
+                slot: s;
+                index: i;
+            }
+        }
+        HorizontalLayout {
+            padding: 20px;
+            padding-left: 24px;
+            spacing: 14px;
+            height: 92px;
+            Icon {
+                y: (parent.height - self.height) / 2;
+                source: AppState.slots-dirty ? Icons.info : Icons.check-circle;
+                tint: AppState.slots-dirty ? Theme.warning : Theme.success;
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: AppState.machine-busy != "" ? AppState.machine-busy : AppState.slots-status;
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                wrap: word-wrap;
+                vertical-alignment: center;
+            }
+            Button {
+                text: "Save to machine";
+                has-icon: true;
+                icon: Icons.bluetooth;
+                enabled: AppState.machine-busy == "";
+                clicked => { AppState.push-presets(); }
+            }
+        }
+    }
+}

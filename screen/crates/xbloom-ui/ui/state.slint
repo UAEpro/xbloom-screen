@@ -1,0 +1,244 @@
+// The contract between the Rust app and the UI: data structs, the AppState global
+// (properties Rust fills in, callbacks Rust implements), and the icon set.
+
+export enum Page { home, recipe, brewing, history, presets, settings, setup }
+export enum LinkState { disconnected, connecting, connected }
+export enum Overlay { none, pin, cancel-brew, pick-recipe, machine, confirm }
+
+export struct PourInfo {
+    label: string,
+    ml: int,
+    temp: int,
+    pattern: string,
+    pause: int,
+    agitation: bool,
+    share: float,     // ml / total, for the pour timeline
+}
+
+export struct RecipeCard {
+    id: string,
+    name: string,
+    subtitle: string,  // "Omni · custom"
+    kind: string,      // "filter" | "iced" | "no-grind"
+    dose: int,
+    ratio: string,     // "1:15"
+    ratio-value: float,
+    grind: string,     // "62" or "—"
+    water: int,
+    time: string,      // "~2:30"
+    temp: string,      // "93°"
+    note: string,
+    favorite: bool,
+    tint: color,
+    brews: int,
+    pours: [PourInfo],
+}
+
+export struct BrewInfo {
+    active: bool,      // a brew session exists (running or finished)
+    finished: bool,
+    success: bool,
+    error: bool,
+    remote: bool,
+    stage: string,     // connecting | loading | starting | armed | awaiting_confirm | grinding | brewing | drawdown | finished
+    message: string,
+    recipe: string,
+    water: float,
+    coffee: float,
+    target: float,
+    progress: float,
+    elapsed: string,   // "1:24"
+    stage-index: int,
+    stages: [string],
+    outcome: string,
+}
+
+export struct HistoryRow { id: string, title: string, when: string, detail: string, success: bool }
+export struct SlotRow { slot: string, recipe-id: string, recipe: string, detail: string, scale: bool }
+export struct ScanRow { address: string, name: string, signal: string }
+export struct MediaRow { name: string, detail: string, video: bool }
+export struct ToastInfo { message: string, kind: string, visible: bool }
+
+export global AppState {
+    // ── navigation ──
+    in-out property <Page> page: Page.home;
+    in-out property <Overlay> overlay: Overlay.none;
+    in-out property <int> settings-tab: 0;
+
+    // ── chrome / clock ──
+    in property <string> device-name: "xBloom Screen";
+    in property <string> time: "08:42";
+    in property <string> date: "Saturday 17 October";
+    in property <string> greeting: "Good morning";
+
+    // ── machine ──
+    in property <LinkState> link: LinkState.disconnected;
+    in property <string> machine-name: "No machine";
+    in property <string> machine-detail: "";
+    in property <bool> simulator: false;
+    in property <bool> paired: false;
+    in property <bool> scanning: false;
+    in property <[ScanRow]> scan-results: [];
+    in property <string> machine-busy: "";
+
+    // ── recipes ──
+    in property <[RecipeCard]> recipes: [];
+    in-out property <RecipeCard> current;
+    in-out property <int> brew-dose: 16;
+
+    // ── brew ──
+    in property <BrewInfo> brew;
+    in property <string> chart-water: "";     // SVG path commands, viewbox 1000 × 400
+    in property <string> chart-coffee: "";
+    in property <float> chart-target-y: 0.2;   // target water line, 0–1 from the top
+
+    // ── history ──
+    in property <[HistoryRow]> history: [];
+    in-out property <int> history-selected: 0;
+    in property <string> history-title: "";
+    in property <string> history-detail: "";
+    in property <string> history-water: "";
+    in property <string> history-coffee: "";
+
+    // ── dial presets ──
+    in property <[SlotRow]> slots: [];
+    in property <bool> slots-dirty: false;
+    in property <string> slots-status: "";
+    in-out property <int> picking-slot: -1;
+
+    // ── lock / PIN pad ──
+    in property <bool> locked: false;
+    in property <int> lock-mode: 0;            // 0 off · 1 brew needs PIN · 2 screen lock
+    in property <bool> brew-needs-pin: false;
+    in property <string> pin-title: "Enter PIN";
+    in property <string> pin-subtitle: "";
+    in property <string> pin-error: "";
+    in property <int> pin-length: 0;          // digits typed (the PIN itself stays in Rust)
+
+    // ── screensaver ──
+    in property <bool> saver-active: false;
+    in property <int> saver-mode: 1;           // 0 off · 1 clock · 2 video · 3 photos
+    in property <image> saver-frame;
+    in property <bool> saver-has-frame: false;
+    in property <bool> saver-clock-overlay: true;
+    in property <bool> asleep: false;
+
+    // ── settings mirrors ──
+    in property <int> theme-mode: 0;           // 0 light · 1 dark · 2 auto
+    in property <int> brightness: 80;
+    in property <bool> clock-24h: true;
+    in property <bool> allow-remote-start: true;
+    in property <int> hold-ms: 1200;
+    in property <int> saver-idle-min: 2;
+    in property <string> saver-video: "";
+    in property <[MediaRow]> media: [];
+    in property <int> auto-lock-min: 5;
+    in property <bool> auto-connect: true;
+    in property <bool> has-user-pin: false;
+    in property <image> admin-qr;
+    in property <string> admin-url: "";
+    in property <string> version: "";
+    in property <string> platform: "";
+    in property <string> storage: "";
+    in property <int> recipe-count: 0;
+    in property <int> brew-count: 0;
+
+    // ── first-run setup ──
+    in property <bool> needs-setup: false;
+    in-out property <int> setup-step: 0;
+
+    // ── toast ──
+    in property <ToastInfo> toast;
+
+    // ── callbacks (implemented in Rust) ──
+    callback activity();
+    callback wake();
+    callback navigate(Page);
+    callback open-recipe(string);
+    callback toggle-favorite(string);
+    callback start-brew(bool);           // true = remote start (hold-to-brew), false = load only
+    callback cancel-brew();
+    callback brew-dismiss();
+    callback pin-key(string);            // "0"–"9", "del", "ok"
+    callback pin-cancel();
+    callback lock-now();
+    callback connect();
+    callback disconnect();
+    callback scan();
+    callback pair(string);
+    callback forget();
+    callback set-theme(int);
+    callback set-accent(color);
+    callback set-brightness(int);
+    callback set-clock-24h(bool);
+    callback set-saver-mode(int);
+    callback set-saver-idle(int);
+    callback set-saver-video(string);
+    callback set-saver-clock(bool);
+    callback set-lock-mode(int);
+    callback set-auto-lock(int);
+    callback set-remote-start(bool);
+    callback set-hold-ms(int);
+    callback set-auto-connect(bool);
+    callback set-simulator(bool);
+    callback change-admin-pin();
+    callback set-user-pin();
+    callback clear-user-pin();
+    callback assign-slot(int, string);
+    callback set-slot-scale(int, bool);
+    callback push-presets();
+    callback select-history(int);
+    callback setup-start();
+    callback setup-demo();
+    callback setup-finish();
+    callback restart();
+}
+
+export global Icons {
+    out property <image> coffee: @image-url("icons/coffee.svg");
+    out property <image> history: @image-url("icons/history.svg");
+    out property <image> dial: @image-url("icons/disc-3.svg");
+    out property <image> settings: @image-url("icons/settings.svg");
+    out property <image> lock: @image-url("icons/lock.svg");
+    out property <image> unlock: @image-url("icons/lock-open.svg");
+    out property <image> bluetooth: @image-url("icons/bluetooth.svg");
+    out property <image> bluetooth-on: @image-url("icons/bluetooth-connected.svg");
+    out property <image> bluetooth-off: @image-url("icons/bluetooth-off.svg");
+    out property <image> wifi: @image-url("icons/wifi.svg");
+    out property <image> back: @image-url("icons/chevron-left.svg");
+    out property <image> next: @image-url("icons/chevron-right.svg");
+    out property <image> star: @image-url("icons/star.svg");
+    out property <image> close: @image-url("icons/x.svg");
+    out property <image> check: @image-url("icons/check.svg");
+    out property <image> check-circle: @image-url("icons/circle-check.svg");
+    out property <image> x-circle: @image-url("icons/circle-x.svg");
+    out property <image> play: @image-url("icons/play.svg");
+    out property <image> droplet: @image-url("icons/droplet.svg");
+    out property <image> thermometer: @image-url("icons/thermometer.svg");
+    out property <image> timer: @image-url("icons/timer.svg");
+    out property <image> weight: @image-url("icons/weight.svg");
+    out property <image> plus: @image-url("icons/plus.svg");
+    out property <image> minus: @image-url("icons/minus.svg");
+    out property <image> refresh: @image-url("icons/refresh-cw.svg");
+    out property <image> trash: @image-url("icons/trash-2.svg");
+    out property <image> alert: @image-url("icons/triangle-alert.svg");
+    out property <image> power: @image-url("icons/power.svg");
+    out property <image> sun: @image-url("icons/sun.svg");
+    out property <image> moon: @image-url("icons/moon.svg");
+    out property <image> sun-moon: @image-url("icons/sun-moon.svg");
+    out property <image> image: @image-url("icons/image.svg");
+    out property <image> film: @image-url("icons/film.svg");
+    out property <image> qr: @image-url("icons/qr-code.svg");
+    out property <image> info: @image-url("icons/info.svg");
+    out property <image> snowflake: @image-url("icons/snowflake.svg");
+    out property <image> bean: @image-url("icons/bean.svg");
+    out property <image> flame: @image-url("icons/flame.svg");
+    out property <image> backspace: @image-url("icons/delete.svg");
+    out property <image> clock: @image-url("icons/clock.svg");
+    out property <image> monitor: @image-url("icons/monitor.svg");
+    out property <image> hand: @image-url("icons/hand.svg");
+    out property <image> shield: @image-url("icons/shield-check.svg");
+    out property <image> sparkles: @image-url("icons/sparkles.svg");
+    out property <image> gauge: @image-url("icons/gauge.svg");
+    out property <image> scale: @image-url("icons/scale.svg");
+}

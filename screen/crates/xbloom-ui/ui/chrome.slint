@@ -1,0 +1,188 @@
+// App chrome: the navigation rail, page headers and the toast.
+
+import { Theme } from "theme.slint";
+import { AppState, Icons, Page, Overlay } from "state.slint";
+import { Icon, IconButton, StatusPill } from "widgets.slint";
+
+component NavItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+    background: active ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
+    animate background { duration: 140ms; }
+    VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+        Icon {
+            x: (parent.width - self.width) / 2;
+            source: root.icon;
+            tint: root.active ? Theme.accent-strong : Theme.text-2;
+            width: 24px;
+            height: 24px;
+        }
+        Text {
+            text: root.label;
+            color: root.active ? Theme.accent-strong : Theme.text-2;
+            font-size: Theme.fs-caption;
+            font-weight: root.active ? 700 : 600;
+            horizontal-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+export component Logo inherits Rectangle {
+    in property <length> size: 48px;
+    width: size;
+    height: size;
+    border-radius: size * 0.32;
+    background: Theme.accent;
+    Icon {
+        source: Icons.coffee;
+        tint: Theme.accent-ink;
+        width: root.size * 0.52;
+        height: root.size * 0.52;
+    }
+}
+
+export component NavRail inherits Rectangle {
+    width: 88px;
+    background: Theme.surface;
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.border;
+    }
+    VerticalLayout {
+        padding-top: 16px;
+        padding-bottom: 16px;
+        spacing: 8px;
+        alignment: start;
+        Logo { x: (parent.width - self.width) / 2; }
+        Rectangle { height: 14px; }
+        NavItem {
+            x: (parent.width - self.width) / 2;
+            icon: Icons.coffee;
+            label: "Brew";
+            active: AppState.page == Page.home || AppState.page == Page.recipe || AppState.page == Page.brewing;
+            clicked => { AppState.navigate(Page.home); }
+        }
+        NavItem {
+            x: (parent.width - self.width) / 2;
+            icon: Icons.history;
+            label: "History";
+            active: AppState.page == Page.history;
+            clicked => { AppState.navigate(Page.history); }
+        }
+        NavItem {
+            x: (parent.width - self.width) / 2;
+            icon: Icons.dial;
+            label: "Dial";
+            active: AppState.page == Page.presets;
+            clicked => { AppState.navigate(Page.presets); }
+        }
+        NavItem {
+            x: (parent.width - self.width) / 2;
+            icon: Icons.settings;
+            label: "Settings";
+            active: AppState.page == Page.settings;
+            clicked => { AppState.navigate(Page.settings); }
+        }
+    }
+    if AppState.lock-mode > 0: IconButton {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 18px;
+        icon: Icons.lock;
+        tint: Theme.text-2;
+        fill: Theme.surface-2;
+        clicked => { AppState.lock-now(); }
+    }
+}
+
+export component Header inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> show-back: false;
+    callback back();
+    height: 76px;
+    padding-left: 24px;
+    padding-right: 20px;
+    spacing: 14px;
+    if root.show-back: IconButton {
+        y: (parent.height - self.height) / 2;
+        icon: Icons.back;
+        clicked => { root.back(); }
+    }
+    VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: Theme.fs-title;
+            font-weight: 700;
+            overflow: elide;
+        }
+        if root.subtitle != "": Text {
+            text: root.subtitle;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            overflow: elide;
+        }
+    }
+    Rectangle { horizontal-stretch: 1; }
+    StatusPill {
+        y: (parent.height - self.height) / 2;
+        clicked => { AppState.overlay = Overlay.machine; }
+    }
+    Text {
+        text: AppState.time;
+        color: Theme.text;
+        font-size: Theme.fs-h2;
+        font-weight: 700;
+        vertical-alignment: center;
+        min-width: 64px;
+        horizontal-alignment: right;
+    }
+}
+
+export component ToastView inherits Rectangle {
+    property <color> tone: AppState.toast.kind == "error" ? Theme.danger
+        : AppState.toast.kind == "warning" ? Theme.warning
+        : AppState.toast.kind == "success" ? Theme.success : Theme.accent;
+    in property <length> limit: 600px;
+    width: min(limit, row.preferred-width);
+    height: 52px;
+    border-radius: 26px;
+    background: Theme.dark ? Theme.surface-3 : #2a211b;
+    row := HorizontalLayout {
+        padding-left: 18px;
+        padding-right: 22px;
+        spacing: 10px;
+        alignment: center;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            source: AppState.toast.kind == "error" || AppState.toast.kind == "warning" ? Icons.alert : Icons.check-circle;
+            tint: root.tone;
+            width: 20px;
+            height: 20px;
+        }
+        Text {
+            text: AppState.toast.message;
+            color: #f6eee6;
+            font-size: Theme.fs-small;
+            font-weight: 600;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}

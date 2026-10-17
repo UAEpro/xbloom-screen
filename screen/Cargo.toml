@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/xbloom-core",
+    "crates/xbloom-app",
+    "crates/xbloom-ui",
+]
+# The ESP32-S3 firmware builds with the Xtensa toolchain (`espup`), so it is its own
+# cargo project that path-depends on the shared crates instead of being a member here.
+exclude = ["firmware"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+repository = "https://github.com/uaepro/xbloom-screen"
+
+[workspace.dependencies]
+xbloom-core = { path = "crates/xbloom-core", default-features = false }
+xbloom-app = { path = "crates/xbloom-app" }
+xbloom-ui = { path = "crates/xbloom-ui", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = "1"
+log = "0.4"
+
+[profile.release]
+opt-level = "s"     # small + fast: the Pi Zero 2 W has 512 MB and a slow SD card
+lto = "thin"
+codegen-units = 4
+strip = true
+panic = "abort"
+
+[profile.dev.package."*"]
+opt-level = 2       # keep Slint + JPEG decoding usable in debug builds

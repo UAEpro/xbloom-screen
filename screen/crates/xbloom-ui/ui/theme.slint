@@ -1,0 +1,66 @@
+// Design tokens for the xBloom screen ("Crema"): warm paper light theme, espresso dark theme.
+//
+// Rules that keep the UI identical on the Raspberry Pi and the ESP32-S3 software renderer:
+//  * no drop shadows (unsupported) — elevation is a 1px border + a tonal surface step;
+//  * no rounded clipping of images — imagery is full-bleed or square;
+//  * a fixed set of font sizes — the MCU build pre-renders glyphs per size.
+
+import "fonts/Inter-Light.otf";
+import "fonts/Inter-Regular.otf";
+import "fonts/Inter-Medium.otf";
+import "fonts/Inter-SemiBold.otf";
+import "fonts/Inter-Bold.otf";
+
+export global Theme {
+    in-out property <bool> dark: false;
+    in-out property <color> accent: #c8743a;
+
+    // Surfaces (back to front).
+    out property <color> bg: dark ? #13100d : #f6f1ea;
+    out property <color> surface: dark ? #1d1814 : #ffffff;
+    out property <color> surface-2: dark ? #27211c : #f1e9df;
+    out property <color> surface-3: dark ? #332a23 : #e8ddd0;
+    out property <color> border: dark ? #382e27 : #e7dccf;
+    out property <color> border-strong: dark ? #4a3e35 : #d6c7b6;
+    out property <color> scrim: dark ? #000000b0 : #1f171280;
+
+    // Text.
+    out property <color> text: dark ? #f6eee6 : #1f1712;
+    out property <color> text-2: dark ? #bdaea0 : #6b5d52;
+    out property <color> text-3: dark ? #857769 : #a39385;
+
+    // Accent and semantic colours.
+    out property <color> accent-ink: #ffffff;
+    out property <color> accent-strong: dark ? accent.brighter(0.15) : accent.darker(0.12);
+    out property <color> accent-soft: accent.transparentize(dark ? 0.78 : 0.86);
+    out property <color> success: dark ? #46b883 : #2f9e6b;
+    out property <color> success-soft: success.transparentize(0.85);
+    out property <color> warning: dark ? #e9ad3a : #c98a12;
+    out property <color> warning-soft: warning.transparentize(0.85);
+    out property <color> danger: dark ? #ec6a5c : #d24c3f;
+    out property <color> danger-soft: danger.transparentize(0.86);
+    out property <color> water: dark ? #5aa9e6 : #3a86c8;
+    out property <color> water-soft: water.transparentize(0.86);
+
+    // Type scale — keep to these sizes.
+    out property <length> fs-clock: 120px;
+    out property <length> fs-display: 56px;
+    out property <length> fs-hero: 36px;
+    out property <length> fs-title: 26px;
+    out property <length> fs-h2: 20px;
+    out property <length> fs-body: 16px;
+    out property <length> fs-small: 14px;
+    out property <length> fs-caption: 12px;
+
+    // Shape and rhythm.
+    out property <length> r-card: 22px;
+    out property <length> r-btn: 16px;
+    out property <length> r-field: 12px;
+    out property <length> gap: 12px;
+    out property <length> pad: 20px;
+}
+
+// Accent presets offered in settings.
+export global Accents {
+    out property <[color]> list: [#c8743a, #b5523b, #8a6a3d, #3f8f6b, #3a7cb8, #7a5cc0];
+}

@@ -1,0 +1,190 @@
+// Modal overlays: PIN entry, stop-brew confirmation, the machine sheet, the recipe picker.
+
+import { Theme } from "theme.slint";
+import { AppState, Icons, Overlay, LinkState } from "state.slint";
+import { Icon, Card, Button, ButtonKind, PinPad, IconButton } from "widgets.slint";
+
+component Scrim inherits Rectangle {
+    callback dismiss();
+    background: Theme.scrim;
+    TouchArea { clicked => { root.dismiss(); } }
+}
+
+export component PinOverlay inherits Rectangle {
+    Scrim { dismiss => { AppState.pin-cancel(); } }
+    Card {
+        width: 380px;
+        height: 456px;
+        // swallow taps on the card
+        TouchArea {}
+        VerticalLayout {
+            padding: 20px;
+            spacing: 10px;
+            HorizontalLayout {
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Text { text: AppState.pin-title; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; }
+                    Text { text: AppState.pin-subtitle; color: Theme.text-2; font-size: Theme.fs-small; overflow: elide; }
+                }
+                IconButton { icon: Icons.close; size: 40px; clicked => { AppState.pin-cancel(); } }
+            }
+            PinPad {
+                error: AppState.pin-error;
+                length: AppState.pin-length;
+            }
+        }
+    }
+}
+
+export component CancelBrewOverlay inherits Rectangle {
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    Card {
+        width: 420px;
+        height: 236px;
+        TouchArea {}
+        VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+            HorizontalLayout {
+                spacing: 12px;
+                Icon { source: Icons.alert; tint: Theme.danger; width: 28px; height: 28px; }
+                Text { text: "Stop the brew?"; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; vertical-alignment: center; }
+            }
+            Text {
+                text: "The machine stops pouring and returns to idle. This brew won't be saved to history.";
+                color: Theme.text-2;
+                font-size: Theme.fs-body;
+                wrap: word-wrap;
+            }
+            Rectangle { vertical-stretch: 1; }
+            HorizontalLayout {
+                spacing: 12px;
+                Button {
+                    horizontal-stretch: 1;
+                    text: "Keep brewing";
+                    kind: ButtonKind.secondary;
+                    clicked => { AppState.overlay = Overlay.none; }
+                }
+                Button {
+                    horizontal-stretch: 1;
+                    text: "Stop brew";
+                    kind: ButtonKind.danger;
+                    clicked => {
+                        AppState.overlay = Overlay.none;
+                        AppState.cancel-brew();
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component MachineSheet inherits Rectangle {
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    Card {
+        x: parent.width - self.width - 20px;
+        y: 72px;
+        width: 340px;
+        height: 214px;
+        TouchArea {}
+        VerticalLayout {
+            padding: 20px;
+            spacing: 10px;
+            HorizontalLayout {
+                spacing: 12px;
+                Rectangle {
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 22px;
+                    background: AppState.link == LinkState.connected ? Theme.success-soft : Theme.surface-2;
+                    Icon {
+                        source: AppState.link == LinkState.connected ? Icons.bluetooth-on : Icons.bluetooth-off;
+                        tint: AppState.link == LinkState.connected ? Theme.success : Theme.text-3;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    Text { text: AppState.machine-name + (AppState.simulator ? " (demo)" : ""); color: Theme.text; font-size: Theme.fs-body; font-weight: 700; overflow: elide; }
+                    Text { text: AppState.machine-detail; color: Theme.text-2; font-size: Theme.fs-caption; overflow: elide; }
+                }
+            }
+            Text {
+                text: AppState.link == LinkState.connected ? "Disconnect to hand the machine to the xBloom phone app — it allows one Bluetooth connection."
+                    : "Make sure the machine is on and the phone app is closed.";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                wrap: word-wrap;
+            }
+            Rectangle { vertical-stretch: 1; }
+            if AppState.link == LinkState.connected: Button {
+                text: "Disconnect";
+                kind: ButtonKind.outline;
+                clicked => {
+                    AppState.disconnect();
+                    AppState.overlay = Overlay.none;
+                }
+            }
+            if AppState.link != LinkState.connected: Button {
+                text: AppState.link == LinkState.connecting ? "Connecting…" : AppState.paired || AppState.simulator ? "Connect" : "Pair a machine in Settings";
+                enabled: AppState.link == LinkState.disconnected && (AppState.paired || AppState.simulator);
+                clicked => {
+                    AppState.connect();
+                    AppState.overlay = Overlay.none;
+                }
+            }
+        }
+    }
+}
+
+export component PickRecipeOverlay inherits Rectangle {
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    Card {
+        width: 460px;
+        height: parent.height - 60px;
+        TouchArea {}
+        VerticalLayout {
+            padding: 18px;
+            spacing: 10px;
+            HorizontalLayout {
+                Text {
+                    horizontal-stretch: 1;
+                    text: "Recipe for slot " + (AppState.picking-slot == 0 ? "A" : AppState.picking-slot == 1 ? "B" : "C");
+                    color: Theme.text;
+                    font-size: Theme.fs-h2;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+                IconButton { icon: Icons.close; size: 40px; clicked => { AppState.overlay = Overlay.none; } }
+            }
+            Flickable {
+                vertical-stretch: 1;
+                content-height: list.preferred-height;
+                list := VerticalLayout {
+                    spacing: 6px;
+                    for r in AppState.recipes: Rectangle {
+                        height: 58px;
+                        border-radius: 14px;
+                        background: ta.pressed ? Theme.surface-3 : Theme.surface-2;
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            spacing: 12px;
+                            Rectangle { y: (parent.height - self.height) / 2; width: 14px; height: 14px; border-radius: 7px; background: r.tint; }
+                            Text { text: r.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                            Text { text: r.dose + " g · " + r.ratio; color: Theme.text-2; font-size: Theme.fs-small; vertical-alignment: center; }
+                        }
+                        ta := TouchArea {
+                            clicked => {
+                                AppState.activity();
+                                AppState.assign-slot(AppState.picking-slot, r.id);
+                                AppState.overlay = Overlay.none;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,201 @@
+// Recipe detail = the brew confirmation. Shows what will be brewed, lets you adjust the dose
+// (same ratio), then brew: HOLD to start remotely (the deliberate gesture for hot water) or
+// "Load only" so the machine arms and you approve on the machine.
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, Page, PourInfo, LinkState } from "../state.slint";
+import { Icon, Chip, Card, Button, ButtonKind, HoldButton, IconButton, StatTile, SectionTitle } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component PourRow inherits Rectangle {
+    in property <PourInfo> pour;
+    in property <int> index;
+    height: 46px;
+    HorizontalLayout {
+        spacing: 12px;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: Theme.accent-soft;
+            Text {
+                text: root.index + 1;
+                color: Theme.accent-strong;
+                font-size: Theme.fs-small;
+                font-weight: 700;
+            }
+        }
+        Text {
+            width: 110px;
+            text: root.pour.label;
+            color: Theme.text;
+            font-size: Theme.fs-body;
+            font-weight: 600;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Text {
+            width: 56px;
+            text: root.pour.ml + " ml";
+            color: Theme.text;
+            font-size: Theme.fs-small;
+            font-weight: 700;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+        Text {
+            width: 112px;
+            text: root.pour.temp + "° · " + root.pour.pattern + (root.pour.pause > 0 ? " · " + root.pour.pause + " s" : "");
+            color: Theme.text-2;
+            font-size: Theme.fs-caption;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
+export component RecipePage inherits Rectangle {
+    property <int> water: round(AppState.brew-dose * AppState.current.ratio-value);
+    property <bool> busy: AppState.brew.active && !AppState.brew.finished;
+
+    VerticalLayout {
+        Header {
+            show-back: true;
+            title: AppState.current.name;
+            subtitle: AppState.current.subtitle;
+            back => { AppState.navigate(Page.home); }
+        }
+        HorizontalLayout {
+            padding-left: 24px;
+            padding-right: 20px;
+            padding-bottom: 20px;
+            spacing: 16px;
+
+            // ── what you'll brew ──
+            Card {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 14px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        StatTile { icon: Icons.weight; label: "DOSE"; value: AppState.brew-dose; unit: "g"; }
+                        StatTile { icon: Icons.scale; label: "RATIO"; value: AppState.current.ratio; unit: ""; }
+                        StatTile { icon: Icons.gauge; label: "GRIND"; value: AppState.current.grind; unit: ""; }
+                        StatTile { icon: Icons.droplet; label: "WATER"; value: root.water; unit: "ml"; }
+                    }
+                    HorizontalLayout {
+                        SectionTitle { text: "POURS"; vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; }
+                        if AppState.current.time != "": Chip { has-icon: true; icon: Icons.timer; text: AppState.current.time; }
+                    }
+                    HorizontalLayout {
+                        spacing: 3px;
+                        height: 10px;
+                        for p in AppState.current.pours: Rectangle {
+                            horizontal-stretch: max(0.05, p.share);
+                            border-radius: 5px;
+                            background: Theme.water.transparentize(0.3);
+                        }
+                    }
+                    Flickable {
+                        vertical-stretch: 1;
+                        content-height: pours.preferred-height;
+                        pours := VerticalLayout {
+                            for p[i] in AppState.current.pours: PourRow {
+                                pour: p;
+                                index: i;
+                            }
+                        }
+                    }
+                    if AppState.current.note != "": Text {
+                        text: AppState.current.note;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-small;
+                        wrap: word-wrap;
+                        max-height: 40px;
+                        overflow: elide;
+                    }
+                }
+            }
+
+            // ── brew ──
+            Card {
+                width: 252px;
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 14px;
+                    SectionTitle { text: "STRENGTH & SIZE"; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        IconButton {
+                            icon: Icons.minus;
+                            enabled: AppState.brew-dose > 5;
+                            clicked => { AppState.brew-dose = AppState.brew-dose - 1; }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            Text {
+                                text: AppState.brew-dose + " g";
+                                color: Theme.text;
+                                font-size: Theme.fs-title;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: root.water + " ml water";
+                                color: Theme.text-2;
+                                font-size: Theme.fs-caption;
+                                horizontal-alignment: center;
+                            }
+                        }
+                        IconButton {
+                            icon: Icons.plus;
+                            enabled: AppState.brew-dose < 18;
+                            clicked => { AppState.brew-dose = AppState.brew-dose + 1; }
+                        }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    Text {
+                        text: root.busy ? "A brew is already running." : AppState.link != LinkState.connected && !AppState.simulator ? "The machine is offline — it will connect when you brew." : "Beans in, cup in place, tank filled?";
+                        color: Theme.text-2;
+                        font-size: Theme.fs-small;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                    if AppState.allow-remote-start: HoldButton {
+                        text: "Hold to brew";
+                        locked: AppState.brew-needs-pin;
+                        hold-ms: AppState.hold-ms;
+                        enabled: !root.busy;
+                        activated => { AppState.start-brew(true); }
+                    }
+                    Button {
+                        text: AppState.allow-remote-start ? "Load only" : "Send to machine";
+                        has-icon: true;
+                        icon: Icons.hand;
+                        kind: AppState.allow-remote-start ? ButtonKind.outline : ButtonKind.primary;
+                        enabled: !root.busy;
+                        clicked => { AppState.start-brew(false); }
+                    }
+                    Text {
+                        text: AppState.allow-remote-start ? "Load only: the machine arms, you press start on it." : "The machine arms; press start on the machine.";
+                        color: Theme.text-3;
+                        font-size: Theme.fs-caption;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -1,0 +1,244 @@
+// Home: pick a recipe. A horizontally scrolling row of recipe cards.
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, RecipeCard, Page, PourInfo } from "../state.slint";
+import { Icon, Chip, Card } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component MiniStat inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 2px;
+    Text {
+        text: root.label;
+        color: Theme.text-3;
+        font-size: Theme.fs-caption;
+        font-weight: 600;
+    }
+    Text {
+        text: root.value;
+        color: Theme.text;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+    }
+}
+
+component PourProfile inherits HorizontalLayout {
+    in property <[PourInfo]> pours;
+    in property <color> tint;
+    spacing: 3px;
+    height: 8px;
+    for p in root.pours: Rectangle {
+        horizontal-stretch: max(0.05, p.share);
+        border-radius: 4px;
+        background: root.tint.transparentize(0.25);
+    }
+}
+
+component RecipeTile inherits Rectangle {
+    in property <RecipeCard> recipe;
+    callback open();
+    width: 236px;
+    background: ta.pressed ? Theme.surface-2 : Theme.surface;
+    border-radius: Theme.r-card;
+    border-width: 1px;
+    border-color: Theme.border;
+    animate background { duration: 120ms; }
+
+    band := Rectangle {
+        x: 0;
+        y: 0;
+        height: 112px;
+        border-top-left-radius: Theme.r-card;
+        border-top-right-radius: Theme.r-card;
+        background: root.recipe.tint;
+        // Soft decorative rings, clipped to the band (kept clear of the rounded corners:
+        // the software renderer clips rectangles, not radii).
+        Rectangle {
+            x: 0;
+            y: Theme.r-card;
+            width: parent.width;
+            height: parent.height - Theme.r-card;
+            clip: true;
+            Rectangle {
+                x: parent.width - 118px;
+                y: -6px;
+                width: 150px;
+                height: 150px;
+                border-radius: 75px;
+                background: #ffffff1a;
+            }
+            Rectangle {
+                x: parent.width - 60px;
+                y: 34px;
+                width: 84px;
+                height: 84px;
+                border-radius: 42px;
+                background: #ffffff14;
+            }
+        }
+        Rectangle {
+            x: 16px;
+            y: 16px;
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: #ffffff33;
+            Icon {
+                source: root.recipe.kind == "iced" ? Icons.snowflake : root.recipe.kind == "no-grind" ? Icons.bean : Icons.droplet;
+                tint: #ffffff;
+                width: 20px;
+                height: 20px;
+            }
+        }
+        if root.recipe.favorite: Icon {
+            x: parent.width - self.width - 18px;
+            y: 18px;
+            source: Icons.star;
+            tint: #ffffff;
+            width: 20px;
+            height: 20px;
+        }
+        Text {
+            x: 16px;
+            y: parent.height - self.height - 14px;
+            text: root.recipe.dose + " g · " + root.recipe.ratio;
+            color: #ffffff;
+            font-size: Theme.fs-title;
+            font-weight: 700;
+        }
+    }
+
+    VerticalLayout {
+        y: band.height;
+        height: parent.height - band.height;
+        padding: 16px;
+        padding-top: 14px;
+        spacing: 6px;
+        Text {
+            text: root.recipe.name;
+            color: Theme.text;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            wrap: word-wrap;
+            max-height: 52px;
+            overflow: elide;
+        }
+        Text {
+            text: root.recipe.subtitle;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            overflow: elide;
+        }
+        if root.recipe.note != "": Text {
+            text: root.recipe.note;
+            color: Theme.text-3;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+            max-height: 48px;
+            overflow: elide;
+        }
+        Rectangle { vertical-stretch: 1; }
+        Text {
+            text: root.recipe.pours.length + " pours · " + root.recipe.temp;
+            color: Theme.text-2;
+            font-size: Theme.fs-caption;
+            font-weight: 600;
+        }
+        PourProfile { pours: root.recipe.pours; tint: root.recipe.tint; }
+        Rectangle { height: 4px; }
+        HorizontalLayout {
+            spacing: 14px;
+            MiniStat { label: "Grind"; value: root.recipe.grind; }
+            MiniStat { label: "Water"; value: root.recipe.water + " ml"; }
+            MiniStat { label: "Time"; value: root.recipe.time; }
+        }
+    }
+
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.open();
+        }
+    }
+}
+
+export component HomePage inherits Rectangle {
+    VerticalLayout {
+        Header {
+            title: AppState.greeting;
+            subtitle: AppState.date + "  ·  " + AppState.recipes.length + (AppState.recipes.length == 1 ? " recipe" : " recipes");
+        }
+        if AppState.brew.active && !AppState.brew.finished: Rectangle {
+            height: 56px;
+            HorizontalLayout { padding-left: 24px; padding-right: 20px;
+                banner := Rectangle {
+                    border-radius: 16px;
+                    background: ta.pressed ? Theme.accent.darker(0.1) : Theme.accent;
+                    HorizontalLayout {
+                        padding-left: 18px;
+                        padding-right: 18px;
+                        spacing: 10px;
+                        Icon { y: (parent.height - self.height) / 2; source: Icons.coffee; tint: Theme.accent-ink; }
+                        Text {
+                            text: "Brewing " + AppState.brew.recipe + " — " + AppState.brew.message;
+                            color: Theme.accent-ink;
+                            font-size: Theme.fs-body;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        Icon { y: (parent.height - self.height) / 2; source: Icons.next; tint: Theme.accent-ink; }
+                    }
+                    ta := TouchArea { clicked => { AppState.navigate(Page.brewing); } }
+                }
+            }
+        }
+        if AppState.recipes.length == 0: Rectangle {
+            vertical-stretch: 1;
+            Card {
+                width: 460px;
+                height: 210px;
+                VerticalLayout {
+                    padding: 28px;
+                    spacing: 10px;
+                    alignment: center;
+                    Icon { x: (parent.width - self.width) / 2; source: Icons.coffee; tint: Theme.accent; width: 40px; height: 40px; }
+                    Text {
+                        text: "No recipes yet";
+                        color: Theme.text;
+                        font-size: Theme.fs-h2;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Add recipes from the admin panel on your phone:\n" + AppState.admin-url;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-small;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+        if AppState.recipes.length > 0: flick := Flickable {
+            vertical-stretch: 1;
+            content-width: max(self.width, row.preferred-width);
+            interactive: true;
+            flicked => { AppState.activity(); }
+            row := HorizontalLayout {
+                padding-left: 24px;
+                padding-right: 24px;
+                padding-top: 6px;
+                padding-bottom: 22px;
+                spacing: 16px;
+                alignment: start;
+                for r in AppState.recipes: RecipeTile {
+                    recipe: r;
+                    open => { AppState.open-recipe(r.id); }
+                }
+            }
+        }
+    }
+}

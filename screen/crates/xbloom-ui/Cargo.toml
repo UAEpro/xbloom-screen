@@ -1,0 +1,45 @@
+[package]
+name = "xbloom-ui"
+description = "The xBloom touchscreen UI (Slint) and its glue to the app layer — shared by the Raspberry Pi app and the ESP32-S3 firmware."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["backend-linuxkms", "backend-winit"]
+# Hosted builds (Raspberry Pi / Linux / desktop): fonts and images are loaded at runtime.
+# The software renderer is the default everywhere, so a Pi draws exactly what the ESP32 does.
+std = ["slint/std", "slint/renderer-software"]
+# Full-screen kiosk straight on DRM/KMS + libinput (Raspberry Pi OS Lite; no desktop needed).
+backend-linuxkms = ["std", "slint/backend-linuxkms-noseat"]
+# A desktop window (development, or Raspberry Pi OS with a desktop).
+backend-winit = ["std", "slint/backend-winit"]
+# Optional GPU renderer (OpenGL ES via femtovg).
+gpu = ["std", "slint/renderer-femtovg"]
+# Microcontroller builds (ESP32-S3): fonts and images are pre-rendered at compile time for
+# Slint's software renderer.
+mcu = []
+# Offscreen PNG rendering of every screen (docs, visual checks).
+screenshot = ["std", "slint/renderer-software", "dep:png"]
+
+[dependencies]
+xbloom-core = { workspace = true, features = ["std"] }
+xbloom-app = { workspace = true }
+slint = { version = "1.18", default-features = false, features = ["compat-1-2"] }
+qrcodegen = "1.8"
+libc = "0.2"
+log = { workspace = true }
+png = { version = "0.18", optional = true }
+
+[build-dependencies]
+slint-build = "1.18"
+
+[dev-dependencies]
+jpeg-encoder = "0.6"
+tempfile = "3"
+
+[[example]]
+name = "screenshots"
+required-features = ["screenshot"]

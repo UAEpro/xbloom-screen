@@ -1,0 +1,249 @@
+// The live brew: progress ring + water/coffee chart while brewing, then the result.
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, Page, Overlay } from "../state.slint";
+import { Icon, Chip, Card, Button, ButtonKind, Ring, BrewChart, SectionTitle } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component StageChip inherits Rectangle {
+    in property <string> label;
+    in property <bool> done;
+    in property <bool> current;
+    height: 34px;
+    border-radius: 17px;
+    background: current ? Theme.accent : done ? Theme.accent-soft : Theme.surface-2;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 14px;
+        spacing: 6px;
+        if root.done && !root.current: Icon {
+            y: (parent.height - self.height) / 2;
+            source: Icons.check;
+            tint: Theme.accent-strong;
+            width: 14px;
+            height: 14px;
+        }
+        Text {
+            text: root.label;
+            color: root.current ? Theme.accent-ink : root.done ? Theme.accent-strong : Theme.text-2;
+            font-size: Theme.fs-caption;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component Live inherits Rectangle {
+    property <string> stage: AppState.brew.stage;
+    property <bool> waiting: stage == "armed" || stage == "awaiting_confirm";
+    property <bool> preparing: stage == "connecting" || stage == "loading" || stage == "starting";
+
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 20px;
+        padding-bottom: 20px;
+        spacing: 16px;
+
+        // ── ring ──
+        Card {
+            width: 300px;
+            VerticalLayout {
+                padding: 18px;
+                spacing: 12px;
+                alignment: center;
+                Ring {
+                    x: (parent.width - self.width) / 2;
+                    width: 220px;
+                    height: 220px;
+                    progress: AppState.brew.progress;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 0px;
+                        if root.waiting || root.preparing: Icon {
+                            x: (parent.width - self.width) / 2;
+                            source: root.waiting ? Icons.hand : Icons.bluetooth-on;
+                            tint: Theme.accent;
+                            width: 40px;
+                            height: 40px;
+                        }
+                        if !root.waiting && !root.preparing: Text {
+                            text: round(AppState.brew.water);
+                            color: Theme.text;
+                            font-size: Theme.fs-display;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: root.waiting || root.preparing ? "" : "of " + round(AppState.brew.target) + " g water";
+                            color: Theme.text-2;
+                            font-size: Theme.fs-small;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 8px;
+                    Chip { has-icon: true; icon: Icons.timer; text: AppState.brew.elapsed; }
+                    Chip { has-icon: true; icon: Icons.coffee; text: round(AppState.brew.coffee) + " g in cup"; }
+                }
+            }
+        }
+
+        // ── status + chart ──
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 12px;
+            Card {
+                height: 82px;
+                background: root.waiting ? Theme.accent-soft : Theme.surface;
+                border-color: root.waiting ? Theme.accent.transparentize(0.6) : Theme.border;
+                HorizontalLayout {
+                    padding-left: 18px;
+                    padding-right: 18px;
+                    spacing: 14px;
+                    Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 22px;
+                        background: root.waiting ? Theme.accent : Theme.surface-2;
+                        Icon {
+                            source: root.waiting ? Icons.hand : root.stage == "grinding" ? Icons.gauge : Icons.droplet;
+                            tint: root.waiting ? Theme.accent-ink : Theme.water;
+                            width: 22px;
+                            height: 22px;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: AppState.brew.message;
+                            color: Theme.text;
+                            font-size: Theme.fs-h2;
+                            font-weight: 700;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: root.waiting ? "Press start on the xBloom to begin." : root.stage == "grinding" ? "Grinding is quiet for ~20 s — that's normal."
+                                : root.preparing ? "Talking to the machine…" : AppState.brew.stages.length > 0 ? AppState.brew.stages[AppState.brew.stage-index] + " · " + (AppState.brew.stage-index + 1) + " of " + AppState.brew.stages.length : "";
+                            color: Theme.text-2;
+                            font-size: Theme.fs-small;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+            BrewChart {
+                vertical-stretch: 1;
+                water: AppState.chart-water;
+                coffee: AppState.chart-coffee;
+                target-y: AppState.chart-target-y;
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                height: 52px;
+                Flickable {
+                    horizontal-stretch: 1;
+                    content-width: stages.preferred-width;
+                    stages := HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        padding-top: 9px;
+                        padding-bottom: 9px;
+                        for s[i] in AppState.brew.stages: StageChip {
+                            label: s;
+                            done: i < AppState.brew.stage-index || AppState.brew.stage == "drawdown";
+                            current: i == AppState.brew.stage-index && (AppState.brew.stage == "brewing");
+                        }
+                    }
+                }
+                Button {
+                    text: "Stop";
+                    kind: ButtonKind.danger;
+                    has-icon: true;
+                    icon: Icons.close;
+                    clicked => { AppState.overlay = Overlay.cancel-brew; }
+                }
+            }
+        }
+    }
+}
+
+component Result inherits Rectangle {
+    property <bool> ok: AppState.brew.success;
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 20px;
+        padding-bottom: 20px;
+        spacing: 16px;
+        Card {
+            width: 300px;
+            VerticalLayout {
+                padding: 24px;
+                spacing: 14px;
+                alignment: center;
+                Rectangle {
+                    x: (parent.width - self.width) / 2;
+                    width: 96px;
+                    height: 96px;
+                    border-radius: 48px;
+                    background: root.ok ? Theme.success-soft : AppState.brew.error ? Theme.danger-soft : Theme.warning-soft;
+                    Icon {
+                        source: root.ok ? Icons.check-circle : Icons.alert;
+                        tint: root.ok ? Theme.success : AppState.brew.error ? Theme.danger : Theme.warning;
+                        width: 48px;
+                        height: 48px;
+                    }
+                }
+                Text {
+                    text: AppState.brew.message;
+                    color: Theme.text;
+                    font-size: Theme.fs-h2;
+                    font-weight: 700;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+                if root.ok: Text {
+                    text: round(AppState.brew.water) + " g water  ·  " + round(AppState.brew.coffee) + " g in cup  ·  " + AppState.brew.elapsed;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-small;
+                    horizontal-alignment: center;
+                }
+                Rectangle { height: 6px; }
+                Button {
+                    text: "Done";
+                    clicked => { AppState.brew-dismiss(); }
+                }
+                Button {
+                    text: root.ok ? "Brew again" : "Try again";
+                    kind: ButtonKind.secondary;
+                    clicked => {
+                        AppState.brew-dismiss();
+                        AppState.open-recipe(AppState.current.id);
+                    }
+                }
+            }
+        }
+        BrewChart {
+            horizontal-stretch: 1;
+            water: AppState.chart-water;
+            coffee: AppState.chart-coffee;
+            target-y: AppState.chart-target-y;
+        }
+    }
+}
+
+export component BrewingPage inherits Rectangle {
+    VerticalLayout {
+        Header {
+            show-back: AppState.brew.finished;
+            title: AppState.brew.recipe;
+            subtitle: AppState.brew.remote ? "Started from the screen" : "Approve on the machine";
+            back => { AppState.brew-dismiss(); }
+        }
+        if !AppState.brew.finished: Live { vertical-stretch: 1; }
+        if AppState.brew.finished: Result { vertical-stretch: 1; }
+    }
+}

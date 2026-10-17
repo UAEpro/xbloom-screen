@@ -1,0 +1,186 @@
+// First-run setup: welcome → admin PIN → pair the machine (or demo mode) → admin panel.
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, LinkState } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, PinPad, Chip } from "../widgets.slint";
+import { Logo } from "../chrome.slint";
+
+component Steps inherits HorizontalLayout {
+    in property <int> step;
+    spacing: 8px;
+    alignment: center;
+    for i in 4: Rectangle {
+        width: i == root.step ? 28px : 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: i <= root.step ? Theme.accent : Theme.surface-3;
+        animate width { duration: 200ms; }
+    }
+}
+
+export component SetupPage inherits Rectangle {
+    background: Theme.bg;
+    VerticalLayout {
+        padding: 28px;
+        spacing: 16px;
+        Steps { step: AppState.setup-step; }
+
+        // 0 — welcome
+        if AppState.setup-step == 0: Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+            spacing: 36px;
+            alignment: center;
+            VerticalLayout {
+                width: 420px;
+                alignment: center;
+                spacing: 14px;
+                Logo { size: 72px; }
+                Text {
+                    text: "Welcome to your xBloom screen";
+                    color: Theme.text;
+                    font-size: Theme.fs-hero;
+                    font-weight: 700;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: "Pick a recipe, hold to brew, and watch every pour live. Let's set an admin PIN and connect your machine — it takes a minute.";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-body;
+                    wrap: word-wrap;
+                }
+                Rectangle { height: 8px; }
+                Button {
+                    text: "Get started";
+                    has-icon: true;
+                    icon: Icons.next;
+                    clicked => { AppState.setup-start(); }
+                }
+            }
+        }
+        }
+
+        // 1 — admin PIN (the PIN flow lives in Rust; this shows the pad)
+        if AppState.setup-step == 1: Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+            spacing: 36px;
+            alignment: center;
+            VerticalLayout {
+                width: 320px;
+                alignment: center;
+                spacing: 10px;
+                Icon { source: Icons.shield; tint: Theme.accent; width: 44px; height: 44px; }
+                Text { text: AppState.pin-title; color: Theme.text; font-size: Theme.fs-title; font-weight: 700; wrap: word-wrap; }
+                Text { text: AppState.pin-subtitle; color: Theme.text-2; font-size: Theme.fs-body; wrap: word-wrap; }
+            }
+            PinPad { error: AppState.pin-error; length: AppState.pin-length; }
+        }
+        }
+
+        // 2 — machine
+        if AppState.setup-step == 2: Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+            spacing: 28px;
+            VerticalLayout {
+                width: 300px;
+                alignment: center;
+                spacing: 10px;
+                Icon { source: Icons.bluetooth; tint: Theme.accent; width: 44px; height: 44px; }
+                Text { text: "Connect your xBloom"; color: Theme.text; font-size: Theme.fs-title; font-weight: 700; }
+                Text {
+                    text: "Switch the machine on and close the xBloom phone app — the machine accepts one Bluetooth connection at a time.";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-body;
+                    wrap: word-wrap;
+                }
+                Rectangle { height: 6px; }
+                Button {
+                    text: AppState.scanning ? "Scanning…" : "Scan again";
+                    kind: ButtonKind.secondary;
+                    has-icon: true;
+                    icon: Icons.refresh;
+                    enabled: !AppState.scanning;
+                    clicked => { AppState.scan(); }
+                }
+                Button {
+                    text: "No machine? Try demo mode";
+                    kind: ButtonKind.ghost;
+                    clicked => { AppState.setup-demo(); }
+                }
+            }
+            Card {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 8px;
+                    if AppState.link == LinkState.connected: HorizontalLayout {
+                        spacing: 12px;
+                        height: 64px;
+                        Icon { y: (parent.height - self.height) / 2; source: Icons.check-circle; tint: Theme.success; width: 28px; height: 28px; }
+                        Text { text: "Connected to " + AppState.machine-name; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
+                        Button { y: (parent.height - self.height) / 2; text: "Continue"; clicked => { AppState.setup-step = 3; } }
+                    }
+                    if AppState.scan-results.length == 0 && AppState.link != LinkState.connected: Text {
+                        text: AppState.scanning ? "Looking for machines nearby…" : "No machines found yet.";
+                        color: Theme.text-3;
+                        font-size: Theme.fs-body;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        vertical-stretch: 1;
+                    }
+                    for d in AppState.scan-results: Rectangle {
+                        height: 60px;
+                        border-radius: 14px;
+                        background: ta.pressed ? Theme.surface-3 : Theme.surface-2;
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 12px;
+                            Icon { y: (parent.height - self.height) / 2; source: Icons.coffee; tint: Theme.accent; }
+                            Text { text: d.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
+                            Text { text: AppState.link == LinkState.connecting ? "Connecting…" : "Connect"; color: Theme.accent-strong; font-size: Theme.fs-small; font-weight: 700; vertical-alignment: center; }
+                        }
+                        ta := TouchArea { clicked => { AppState.pair(d.address); } }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+        }
+        }
+
+        // 3 — done
+        if AppState.setup-step == 3: Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+            spacing: 32px;
+            alignment: center;
+            VerticalLayout {
+                width: 380px;
+                alignment: center;
+                spacing: 12px;
+                Icon { source: Icons.sparkles; tint: Theme.accent; width: 44px; height: 44px; }
+                Text { text: "You're all set"; color: Theme.text; font-size: Theme.fs-hero; font-weight: 700; }
+                Text {
+                    text: "Manage recipes, screensaver videos and the lock from your phone: scan the code, then sign in with your admin PIN.";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-body;
+                    wrap: word-wrap;
+                }
+                Chip { has-icon: true; icon: Icons.wifi; text: AppState.admin-url; fill: Theme.accent-soft; fg: Theme.accent-strong; }
+                Rectangle { height: 6px; }
+                Button { text: "Start brewing"; has-icon: true; icon: Icons.coffee; clicked => { AppState.setup-finish(); } }
+            }
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 220px;
+                height: 220px;
+                border-radius: 20px;
+                background: #ffffff;
+                Image { width: 196px; height: 196px; source: AppState.admin-qr; image-rendering: pixelated; }
+            }
+        }
+        }
+    }
+}

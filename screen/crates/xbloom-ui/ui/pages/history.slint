@@ -1,0 +1,130 @@
+// Brew history: past brews (left) and the selected brew's curve (right).
+
+import { Theme } from "../theme.slint";
+import { AppState, Icons, HistoryRow } from "../state.slint";
+import { Icon, Card, BrewChart } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component Row inherits Rectangle {
+    in property <HistoryRow> entry;
+    in property <bool> selected;
+    callback clicked();
+    height: 66px;
+    border-radius: 14px;
+    background: selected ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            background: root.entry.success ? Theme.success-soft : Theme.warning-soft;
+            Icon {
+                source: root.entry.success ? Icons.coffee : Icons.alert;
+                tint: root.entry.success ? Theme.success : Theme.warning;
+                width: 18px;
+                height: 18px;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.entry.title;
+                color: Theme.text;
+                font-size: Theme.fs-body;
+                font-weight: 700;
+                overflow: elide;
+            }
+            Text {
+                text: root.entry.when + "  ·  " + root.entry.detail;
+                color: Theme.text-2;
+                font-size: Theme.fs-caption;
+                overflow: elide;
+            }
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+export component HistoryPage inherits Rectangle {
+    VerticalLayout {
+        Header {
+            title: "History";
+            subtitle: AppState.history.length == 0 ? "No brews yet" : AppState.history.length + " brews";
+        }
+        if AppState.history.length == 0: Rectangle {
+            vertical-stretch: 1;
+            VerticalLayout {
+                alignment: center;
+                spacing: 10px;
+                Icon { x: (parent.width - self.width) / 2; source: Icons.history; tint: Theme.text-3; width: 44px; height: 44px; }
+                Text {
+                    text: "Your brews will show up here, with their water and coffee curves.";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-body;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+        if AppState.history.length > 0: Rectangle {
+            vertical-stretch: 1;
+            list-card := Card {
+                x: 24px;
+                y: 0;
+                width: 320px;
+                height: parent.height - 20px;
+                Flickable {
+                    content-height: list.preferred-height;
+                    flicked => { AppState.activity(); }
+                    list := VerticalLayout {
+                        padding: 8px;
+                        spacing: 2px;
+                        for h[i] in AppState.history: Row {
+                            entry: h;
+                            selected: i == AppState.history-selected;
+                            clicked => { AppState.select-history(i); }
+                        }
+                    }
+                }
+            }
+            Card {
+                x: list-card.x + list-card.width + 16px;
+                y: 0;
+                width: parent.width - self.x - 20px;
+                height: parent.height - 20px;
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 12px;
+                    Text {
+                        text: AppState.history-title;
+                        color: Theme.text;
+                        font-size: Theme.fs-h2;
+                        font-weight: 700;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: AppState.history-detail;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-small;
+                        wrap: word-wrap;
+                    }
+                    BrewChart {
+                        vertical-stretch: 1;
+                        water: AppState.history-water;
+                        coffee: AppState.history-coffee;
+                        show-target: false;
+                    }
+                }
+            }
+        }
+    }
+}

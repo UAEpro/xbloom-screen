@@ -1,0 +1,676 @@
+// Touch-first widgets. Every interactive widget calls AppState.activity() so the idle timer
+// (screensaver / auto-lock) knows the screen is in use.
+
+import { Theme } from "theme.slint";
+import { AppState, Icons, LinkState } from "state.slint";
+
+export component Icon inherits Image {
+    in property <color> tint: Theme.text;
+    colorize: tint;
+    width: 22px;
+    height: 22px;
+    image-fit: contain;
+}
+
+export enum ButtonKind { primary, secondary, ghost, danger, outline, success }
+
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <ButtonKind> kind: ButtonKind.primary;
+    in property <bool> enabled: true;
+    in property <length> font-size: Theme.fs-body;
+    in property <length> pad-x: 22px;
+    callback clicked();
+
+    property <color> base: kind == ButtonKind.primary ? Theme.accent
+        : kind == ButtonKind.danger ? Theme.danger
+        : kind == ButtonKind.success ? Theme.success
+        : kind == ButtonKind.secondary ? Theme.surface-2
+        : transparent;
+    property <color> fg: (kind == ButtonKind.primary || kind == ButtonKind.danger || kind == ButtonKind.success) ? Theme.accent-ink
+        : kind == ButtonKind.outline ? Theme.text : kind == ButtonKind.ghost ? Theme.text-2 : Theme.text;
+
+    min-height: 52px;
+    min-width: 52px;
+    border-radius: Theme.r-btn;
+    background: !enabled ? Theme.surface-2 : ta.pressed ? (base == transparent ? Theme.surface-2 : base.darker(0.12)) : base;
+    border-width: kind == ButtonKind.outline ? 1.5px : 0px;
+    border-color: Theme.border-strong;
+    opacity: enabled ? 1 : 0.55;
+    animate background { duration: 120ms; }
+
+    HorizontalLayout {
+        padding-left: root.pad-x;
+        padding-right: root.pad-x;
+        spacing: 10px;
+        alignment: center;
+        if root.has-icon: Icon {
+            y: (parent.height - self.height) / 2;
+            source: root.icon;
+            tint: root.enabled ? root.fg : Theme.text-3;
+            width: 20px;
+            height: 20px;
+        }
+        if root.text != "": Text {
+            text: root.text;
+            color: root.enabled ? root.fg : Theme.text-3;
+            font-size: root.font-size;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <color> tint: Theme.text;
+    in property <color> fill: Theme.surface-2;
+    in property <length> size: 48px;
+    in property <length> icon-size: 22px;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    background: ta.pressed ? fill.darker(0.1) : fill;
+    opacity: enabled ? 1 : 0.4;
+    animate background { duration: 120ms; }
+    Icon {
+        source: root.icon;
+        tint: root.tint;
+        width: root.icon-size;
+        height: root.icon-size;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+// The deliberate-gesture gate for hot water: fills while held, fires only after `hold-time`.
+// Releasing early cancels.
+export component HoldButton inherits Rectangle {
+    in property <string> text: "Hold to brew";
+    in property <string> holding-text: "Keep holding…";
+    in property <int> hold-ms: 1200;
+    in property <color> tone: Theme.accent;
+    in property <bool> enabled: true;
+    in property <bool> locked: false;     // show a lock: a PIN is asked after the hold
+    callback activated();
+
+    property <bool> fired: false;
+    property <float> progress: 0;
+
+    height: 64px;
+    border-radius: Theme.r-btn;
+    background: tone.transparentize(0.75);
+    opacity: enabled ? 1 : 0.5;
+
+    fill := Rectangle {
+        x: 0;
+        width: parent.width * root.progress;
+        height: parent.height;
+        border-radius: Theme.r-btn;
+        background: root.tone;
+    }
+    // Before the fill covers it, the label sits on the light track; once filled, on the accent.
+    HorizontalLayout {
+        alignment: center;
+        spacing: 12px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            source: root.locked ? Icons.lock : Icons.flame;
+            tint: root.progress > 0.45 ? Theme.accent-ink : Theme.accent-strong;
+            width: 24px;
+            height: 24px;
+        }
+        Text {
+            text: ta.pressed && !root.fired ? root.holding-text : root.text;
+            color: root.progress > 0.45 ? Theme.accent-ink : Theme.accent-strong;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down) {
+                root.fired = false;
+                AppState.activity();
+            }
+        }
+    }
+    // Drives the fill at ~60 fps while held, decays when released.
+    Timer {
+        interval: 16ms;
+        running: ta.pressed || root.progress > 0;
+        triggered => {
+            if (ta.pressed && !root.fired) {
+                root.progress = min(1, root.progress + 16 / root.hold-ms);
+                if (root.progress >= 1) {
+                    root.fired = true;
+                    root.activated();
+                }
+            } else if (!ta.pressed) {
+                root.progress = max(0, root.progress - 0.08);
+            }
+        }
+    }
+}
+
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <color> fg: Theme.text-2;
+    in property <color> fill: Theme.surface-2;
+    height: 30px;
+    border-radius: 15px;
+    background: fill;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 6px;
+        alignment: center;
+        if root.has-icon: Icon {
+            y: (parent.height - self.height) / 2;
+            source: root.icon;
+            tint: root.fg;
+            width: 15px;
+            height: 15px;
+        }
+        Text {
+            text: root.text;
+            color: root.fg;
+            font-size: Theme.fs-caption;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Machine link indicator (tap to open the machine sheet).
+export component StatusPill inherits Rectangle {
+    callback clicked();
+    property <color> dot: AppState.link == LinkState.connected ? Theme.success
+        : AppState.link == LinkState.connecting ? Theme.warning : Theme.text-3;
+    height: 40px;
+    horizontal-stretch: 0;
+    border-radius: 20px;
+    background: ta.pressed ? Theme.surface-3 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 16px;
+        spacing: 8px;
+        alignment: center;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background: root.dot;
+        }
+        Text {
+            text: AppState.link == LinkState.connected ? AppState.machine-name
+                : AppState.link == LinkState.connecting ? "Connecting…"
+                : AppState.paired || AppState.simulator ? "Offline" : "No machine";
+            color: Theme.text;
+            font-size: Theme.fs-small;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+export component Card inherits Rectangle {
+    background: Theme.surface;
+    border-radius: Theme.r-card;
+    border-width: 1px;
+    border-color: Theme.border;
+}
+
+export component Toggle inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    width: 54px;
+    height: 32px;
+    border-radius: 16px;
+    background: checked ? Theme.accent : Theme.surface-3;
+    opacity: enabled ? 1 : 0.5;
+    animate background { duration: 150ms; }
+    knob := Rectangle {
+        width: 26px;
+        height: 26px;
+        y: 3px;
+        x: root.checked ? root.width - self.width - 3px : 3px;
+        border-radius: 13px;
+        background: #ffffff;
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            AppState.activity();
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}
+
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> selected;
+    callback changed(int);
+    height: 44px;
+    border-radius: 12px;
+    background: Theme.surface-2;
+    HorizontalLayout {
+        padding: 4px;
+        spacing: 4px;
+        for opt[i] in root.options: Rectangle {
+            border-radius: 9px;
+            background: i == root.selected ? Theme.surface : transparent;
+            border-width: i == root.selected ? 1px : 0px;
+            border-color: Theme.border;
+            animate background { duration: 120ms; }
+            Text {
+                text: opt;
+                color: i == root.selected ? Theme.text : Theme.text-2;
+                font-size: Theme.fs-small;
+                font-weight: i == root.selected ? 700 : 500;
+            }
+            TouchArea {
+                clicked => {
+                    AppState.activity();
+                    root.selected = i;
+                    root.changed(i);
+                }
+            }
+        }
+    }
+}
+
+export component Stepper inherits HorizontalLayout {
+    in-out property <int> value;
+    in property <int> minimum: 0;
+    in property <int> maximum: 100;
+    in property <int> step: 1;
+    in property <string> unit;
+    in property <string> display: value + unit;
+    callback changed(int);
+    spacing: 10px;
+    alignment: end;
+    IconButton {
+        icon: Icons.minus;
+        size: 44px;
+        enabled: root.value - root.step >= root.minimum;
+        clicked => {
+            root.value = max(root.minimum, root.value - root.step);
+            root.changed(root.value);
+        }
+    }
+    Text {
+        min-width: 72px;
+        text: root.display;
+        color: Theme.text;
+        font-size: Theme.fs-h2;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    IconButton {
+        icon: Icons.plus;
+        size: 44px;
+        enabled: root.value + root.step <= root.maximum;
+        clicked => {
+            root.value = min(root.maximum, root.value + root.step);
+            root.changed(root.value);
+        }
+    }
+}
+
+export component Slider inherits Rectangle {
+    in-out property <int> value: 50;
+    in property <int> minimum: 0;
+    in property <int> maximum: 100;
+    callback released(int);
+    height: 36px;
+    property <float> frac: (value - minimum) / max(1, maximum - minimum);
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 8px;
+        border-radius: 4px;
+        background: Theme.surface-3;
+        Rectangle {
+            x: 0;
+            width: parent.width * root.frac;
+            border-radius: 4px;
+            background: Theme.accent;
+        }
+    }
+    Rectangle {
+        x: (root.width - self.width) * root.frac;
+        y: (root.height - self.height) / 2;
+        width: 28px;
+        height: 28px;
+        border-radius: 14px;
+        background: #ffffff;
+        border-width: 1.5px;
+        border-color: Theme.border-strong;
+    }
+    ta := TouchArea {
+        moved => {
+            root.value = round(root.minimum + clamp(self.mouse-x / root.width, 0, 1) * (root.maximum - root.minimum));
+        }
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down) {
+                AppState.activity();
+                root.value = round(root.minimum + clamp(self.mouse-x / root.width, 0, 1) * (root.maximum - root.minimum));
+            }
+            if (ev.kind == PointerEventKind.up) {
+                root.released(root.value);
+            }
+        }
+    }
+}
+
+component Key inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> is-icon: false;
+    callback pressed-key();
+    width: 76px;
+    height: 64px;
+    border-radius: 18px;
+    background: ta.pressed ? Theme.surface-3 : Theme.surface-2;
+    animate background { duration: 90ms; }
+    if !root.is-icon: Text {
+        text: root.label;
+        color: Theme.text;
+        font-size: Theme.fs-title;
+        font-weight: 500;
+    }
+    if root.is-icon: Icon {
+        source: root.icon;
+        tint: Theme.text-2;
+        width: 26px;
+        height: 26px;
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.pressed-key();
+        }
+    }
+}
+
+// 4–8 digit PIN entry: dots + keypad. Keys go to Rust (AppState.pin-key), which holds the
+// digits; the pad only shows how many have been typed.
+export component PinPad inherits VerticalLayout {
+    in property <string> error;
+    in property <int> length;
+    spacing: 14px;
+    alignment: center;
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 14px;
+        height: 18px;
+        for i in max(4, root.length): Rectangle {
+            width: 14px;
+            height: 14px;
+            y: 2px;
+            border-radius: 7px;
+            background: i < root.length ? (root.error != "" ? Theme.danger : Theme.accent) : transparent;
+            border-width: 2px;
+            border-color: i < root.length ? transparent : Theme.border-strong;
+        }
+    }
+    Text {
+        text: root.error;
+        color: Theme.danger;
+        font-size: Theme.fs-small;
+        font-weight: 600;
+        horizontal-alignment: center;
+        height: 18px;
+    }
+    GridLayout {
+        spacing: 10px;
+        Row {
+            Key { label: "1"; pressed-key => { AppState.pin-key("1"); } }
+            Key { label: "2"; pressed-key => { AppState.pin-key("2"); } }
+            Key { label: "3"; pressed-key => { AppState.pin-key("3"); } }
+        }
+        Row {
+            Key { label: "4"; pressed-key => { AppState.pin-key("4"); } }
+            Key { label: "5"; pressed-key => { AppState.pin-key("5"); } }
+            Key { label: "6"; pressed-key => { AppState.pin-key("6"); } }
+        }
+        Row {
+            Key { label: "7"; pressed-key => { AppState.pin-key("7"); } }
+            Key { label: "8"; pressed-key => { AppState.pin-key("8"); } }
+            Key { label: "9"; pressed-key => { AppState.pin-key("9"); } }
+        }
+        Row {
+            Key { is-icon: true; icon: Icons.backspace; pressed-key => { AppState.pin-key("del"); } }
+            Key { label: "0"; pressed-key => { AppState.pin-key("0"); } }
+            Key { is-icon: true; icon: Icons.check; pressed-key => { AppState.pin-key("ok"); } }
+        }
+    }
+}
+
+// A settings row: title + description on the left, a control on the right.
+export component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    min-height: 68px;
+    HorizontalLayout {
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 16px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 3px;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.fs-body;
+                font-weight: 600;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                wrap: word-wrap;
+            }
+        }
+        @children
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
+export component StatTile inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> unit;
+    in property <image> icon;
+    background: Theme.surface-2;
+    border-radius: 16px;
+    min-height: 76px;
+    min-width: 80px;
+    Icon {
+        x: 12px;
+        y: 13px;
+        source: root.icon;
+        tint: Theme.text-3;
+        width: 15px;
+        height: 15px;
+    }
+    Text {
+        x: 32px;
+        y: 12px;
+        text: root.label;
+        color: Theme.text-2;
+        font-size: Theme.fs-caption;
+        font-weight: 600;
+    }
+    val := Text {
+        x: 12px;
+        y: 34px;
+        text: root.value;
+        color: Theme.text;
+        font-size: Theme.fs-title;
+        font-weight: 700;
+    }
+    Text {
+        x: val.x + val.preferred-width + 3px;
+        y: val.y + val.preferred-height - self.preferred-height - 4px;
+        text: root.unit;
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        font-weight: 600;
+    }
+}
+
+// Circular progress (0–1), drawn as a vector arc — same on GPU and the MCU software renderer.
+export component Ring inherits Rectangle {
+    in property <float> progress: 0;
+    in property <color> tone: Theme.water;
+    in property <length> thickness: 14px;
+    property <float> p: clamp(progress, 0, 0.9999);
+    property <float> r: 44;
+    // track
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: self.width / 2;
+        border-width: root.thickness;
+        border-color: root.tone.transparentize(0.85);
+    }
+    if root.progress >= 0.9999: Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: self.width / 2;
+        border-width: root.thickness;
+        border-color: root.tone;
+    }
+    if root.progress > 0.002 && root.progress < 0.9999: Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 100;
+        viewbox-height: 100;
+        stroke: root.tone;
+        stroke-width: root.thickness;
+        stroke-line-cap: round;
+        MoveTo { x: 50; y: 50 - root.r; }
+        ArcTo {
+            x: 50 + root.r * sin(root.p * 360deg);
+            y: 50 - root.r * cos(root.p * 360deg);
+            radius-x: root.r;
+            radius-y: root.r;
+            large-arc: root.p > 0.5;
+            sweep: true;
+        }
+    }
+    @children
+}
+
+// Live / saved brew curve: water (line) and coffee in the cup (area + line), with the target.
+export component BrewChart inherits Rectangle {
+    in property <string> water;
+    in property <string> coffee;
+    in property <float> target-y: 0.2;
+    in property <bool> show-target: true;
+    background: Theme.surface-2;
+    border-radius: 16px;
+    // grid
+    for i in 3: Rectangle {
+        x: 12px;
+        width: parent.width - 24px;
+        y: parent.height * (i + 1) / 4;
+        height: 1px;
+        background: Theme.border;
+    }
+    if root.show-target: Rectangle {
+        x: 12px;
+        width: parent.width - 24px;
+        y: 10px + (parent.height - 20px) * root.target-y;
+        height: 2px;
+        background: Theme.water.transparentize(0.6);
+    }
+    Path {
+        x: 12px;
+        y: 10px;
+        width: parent.width - 24px;
+        height: parent.height - 20px;
+        viewbox-width: 1000;
+        viewbox-height: 400;
+        commands: root.coffee == "" ? "M 0 400" : root.coffee;
+        stroke: Theme.accent;
+        stroke-width: 3px;
+    }
+    Path {
+        x: 12px;
+        y: 10px;
+        width: parent.width - 24px;
+        height: parent.height - 20px;
+        viewbox-width: 1000;
+        viewbox-height: 400;
+        commands: root.water == "" ? "M 0 400" : root.water;
+        stroke: Theme.water;
+        stroke-width: 3px;
+    }
+    // legend
+    HorizontalLayout {
+        x: 14px;
+        y: 10px;
+        height: 18px;
+        spacing: 14px;
+        alignment: start;
+        HorizontalLayout {
+            spacing: 6px;
+            Rectangle { y: 6px; width: 14px; height: 4px; border-radius: 2px; background: Theme.water; }
+            Text { text: "Water"; color: Theme.text-2; font-size: Theme.fs-caption; font-weight: 600; }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Rectangle { y: 6px; width: 14px; height: 4px; border-radius: 2px; background: Theme.accent; }
+            Text { text: "In cup"; color: Theme.text-2; font-size: Theme.fs-caption; font-weight: 600; }
+        }
+    }
+}
+
+export component SectionTitle inherits Text {
+    color: Theme.text-3;
+    font-size: Theme.fs-caption;
+    font-weight: 700;
+    letter-spacing: 1px;
+}

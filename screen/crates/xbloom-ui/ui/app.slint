@@ -1,0 +1,61 @@
+// The xBloom screen — root window. Designed at 800 × 480 (the Raspberry Pi 7" panel and
+// the common ESP32-S3 4.3" boards); layouts stretch to larger panels.
+
+import { Theme } from "theme.slint";
+import { AppState, Page, Overlay } from "state.slint";
+import { NavRail, ToastView } from "chrome.slint";
+import { HomePage } from "pages/home.slint";
+import { RecipePage } from "pages/recipe.slint";
+import { BrewingPage } from "pages/brewing.slint";
+import { HistoryPage } from "pages/history.slint";
+import { PresetsPage } from "pages/presets.slint";
+import { SettingsPage } from "pages/settings.slint";
+import { SetupPage } from "pages/setup.slint";
+import { LockScreen, Screensaver, Sleep } from "pages/lock.slint";
+import { PinOverlay, CancelBrewOverlay, MachineSheet, PickRecipeOverlay } from "overlays.slint";
+
+export { AppState, Theme, Page, Overlay }
+export { LinkState, RecipeCard, PourInfo, BrewInfo, HistoryRow, SlotRow, ScanRow, MediaRow, ToastInfo } from "state.slint";
+
+export component AppWindow inherits Window {
+    preferred-width: 800px;
+    preferred-height: 480px;
+    min-width: 640px;
+    min-height: 400px;
+    title: "xBloom Screen";
+    background: Theme.bg;
+    default-font-family: "Inter";
+    default-font-size: Theme.fs-body;
+
+    if !AppState.needs-setup: HorizontalLayout {
+        NavRail {}
+        content := Rectangle {
+            horizontal-stretch: 1;
+            // Taps on empty space still count as activity (idle timer).
+            TouchArea { clicked => { AppState.activity(); } }
+            if AppState.page == Page.home: HomePage {}
+            if AppState.page == Page.recipe: RecipePage {}
+            if AppState.page == Page.brewing: BrewingPage {}
+            if AppState.page == Page.history: HistoryPage {}
+            if AppState.page == Page.presets: PresetsPage {}
+            if AppState.page == Page.settings: SettingsPage {}
+        }
+    }
+    if AppState.needs-setup: SetupPage {}
+
+    if AppState.overlay == Overlay.pin: PinOverlay {}
+    if AppState.overlay == Overlay.cancel-brew: CancelBrewOverlay {}
+    if AppState.overlay == Overlay.machine: MachineSheet {}
+    if AppState.overlay == Overlay.pick-recipe: PickRecipeOverlay {}
+
+    ToastView {
+        limit: root.width - 48px;
+        x: (root.width - self.width) / 2;
+        y: AppState.toast.visible ? root.height - self.height - 22px : root.height + 10px;
+        animate y { duration: 220ms; easing: ease-out; }
+    }
+
+    if AppState.locked && !AppState.saver-active: LockScreen {}
+    if AppState.saver-active: Screensaver {}
+    if AppState.asleep: Sleep {}
+}
