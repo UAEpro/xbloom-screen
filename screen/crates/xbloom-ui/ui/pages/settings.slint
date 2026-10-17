@@ -341,6 +341,12 @@ component AdminTab inherits HorizontalLayout {
             font-weight: 700;
             wrap: word-wrap;
         }
+        if AppState.admin-hint != "": Text {
+            text: AppState.admin-hint;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+        }
     }
 }
 

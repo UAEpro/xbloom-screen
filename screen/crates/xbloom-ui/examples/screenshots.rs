@@ -6,6 +6,7 @@
 //! ```
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -19,13 +20,25 @@ use xbloom_ui::{AppState, AppWindow, Overlay, Page};
 const W: u32 = 800;
 const H: u32 = 480;
 
+/// Flipped near the end to show an ESP32 on its own setup hotspot.
+static HOTSPOT: AtomicBool = AtomicBool::new(false);
+
 struct Hooks;
 impl xbloom_app::Platform for Hooks {
     fn admin_urls(&self) -> Vec<String> {
-        vec!["http://192.168.1.42:8080".into()]
+        if HOTSPOT.load(Ordering::Relaxed) {
+            vec!["http://192.168.4.1".into()]
+        } else {
+            vec!["http://192.168.1.42:8080".into()]
+        }
     }
     fn storage(&self) -> Option<(u64, u64)> {
         Some((11_800_000_000, 14_900_000_000))
+    }
+    fn setup_hotspot(&self) -> Option<xbloom_app::Hotspot> {
+        HOTSPOT
+            .load(Ordering::Relaxed)
+            .then(|| xbloom_app::Hotspot { ssid: "xBloom-Screen-1A2B".into(), password: "k7mx2pq9tz".into() })
     }
 }
 
@@ -196,6 +209,19 @@ fn main() {
             xbloom_ui::bind::force_wake();
         }
     }
+
+    // An ESP32 without Wi-Fi: the admin tab shows how to join its hotspot (light theme).
+    HOTSPOT.store(true, Ordering::Relaxed);
+    app.update_settings(|s| s.appearance.theme = xbloom_app::settings::Theme::Light);
+    g.invoke_navigate(Page::Settings);
+    for k in ["2", "5", "8", "0", "ok"] {
+        g.invoke_pin_key(k.into());
+    }
+    g.set_settings_tab(4);
+    shot.pump(Duration::from_millis(300));
+    snap("settings-admin-hotspot");
+    g.invoke_navigate(Page::Home);
+    HOTSPOT.store(false, Ordering::Relaxed);
 
     // First-run setup screens (pure UI state).
     app.update_settings(|s| s.appearance.theme = xbloom_app::settings::Theme::Light);

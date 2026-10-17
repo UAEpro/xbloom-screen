@@ -269,7 +269,7 @@ impl Upload {
         self.file.flush()?;
         self.file.sync_all()?;
         let info = MediaStore::inspect(&self.tmp).and_then(|mut i| {
-            fs::rename(&self.tmp, &self.dest)?;
+            crate::util::replace_file(&self.tmp, &self.dest)?;
             i.name = file_name(&self.dest);
             Ok(i)
         });

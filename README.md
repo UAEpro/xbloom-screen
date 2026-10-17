@@ -29,6 +29,12 @@ It is a small, dependency-light Python package (`bleak` + `pyyaml`; the cloud
 feature adds an optional `cryptography` dep) with a clean CLI and a fully
 documented protocol so others can build on it.
 
+> 📟 **Want a touchscreen next to the machine?** **[xBloom Screen](screen/README.md)** is a
+> standalone controller for a **Raspberry Pi with a touchscreen** or an **ESP32-S3 touch
+> display**. It has a recipe library, live brew view, dial presets, a PIN lock, a video
+> screensaver and a web admin panel for your phone. It is written in Rust and Slint, and
+> uses the same protocol with the same load-only safety model.
+
 > 🤖 **Designed with agentic use in mind.** This was written *by* an AI coding agent
 > ([Claude Code](https://claude.com/claude-code)) and tailored to be driven *by* one —
 > scriptable commands, predictable/parseable output, a fully documented protocol, and a

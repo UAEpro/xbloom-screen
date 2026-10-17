@@ -28,6 +28,18 @@ pub fn to_hex(c: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", c.red(), c.green(), c.blue())
 }
 
+/// "512 KB", "9.6 MB", "28.4 GB".
+pub fn bytes(n: u64) -> String {
+    let n = n as f64;
+    if n >= 1e9 {
+        format!("{:.1} GB", n / 1e9)
+    } else if n >= 1e6 {
+        format!("{:.1} MB", n / 1e6)
+    } else {
+        format!("{:.0} KB", n / 1e3)
+    }
+}
+
 /// `m:ss`.
 pub fn mmss(secs: f32) -> String {
     let s = secs.max(0.0).round() as u32;

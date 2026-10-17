@@ -241,7 +241,16 @@ impl Settings {
         if self.device_name.trim().is_empty() {
             self.device_name = Settings::default().device_name;
         }
-        self.device_name.truncate(40);
+        if let Some((i, _)) = self.device_name.char_indices().nth(40) {
+            self.device_name.truncate(i);
+        }
+        // A POSIX TZ string ("UTC0", "CET-1CEST,M3.5.0,M10.5.0/3"): short printable ASCII.
+        let tz = self.timezone.trim();
+        if tz.is_empty() || tz.len() > 64 || !tz.chars().all(|c| c.is_ascii_graphic()) {
+            self.timezone = Settings::default().timezone;
+        } else if tz.len() != self.timezone.len() {
+            self.timezone = tz.to_string();
+        }
     }
 
     /// Apply a patch from the admin API. Returns true if anything changed.
@@ -385,6 +394,21 @@ mod tests {
         assert_eq!(s.appearance.brightness, 100);
         assert_eq!(s.appearance.accent, "#c8743a");
         assert_eq!(s.security.hold_to_brew_ms, 500);
+    }
+
+    #[test]
+    fn names_and_zones_are_sanitized() {
+        let mut s = Settings {
+            device_name: "Café ".repeat(20),
+            timezone: " CET-1CEST,M3.5.0,M10.5.0/3 ".into(),
+            ..Settings::default()
+        };
+        s.sanitize();
+        assert_eq!(s.device_name.chars().count(), 40);
+        assert_eq!(s.timezone, "CET-1CEST,M3.5.0,M10.5.0/3");
+        s.timezone = "Europe/Zürich; rm".into();
+        s.sanitize();
+        assert_eq!(s.timezone, "UTC0");
     }
 
     #[test]

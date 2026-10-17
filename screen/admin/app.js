@@ -959,6 +959,50 @@ function pinDialog(kind) {
   });
 }
 
+// POSIX TZ rules (what the ESP32's C library understands) for common zones, keyed by the
+// IANA name a browser reports so the panel can suggest the right one.
+const ZONES = [
+  ["UTC0", "UTC", ["UTC", "Etc/UTC"]],
+  ["GMT0BST,M3.5.0/1,M10.5.0", "London, Dublin, Lisbon", ["Europe/London", "Europe/Dublin", "Europe/Lisbon"]],
+  ["CET-1CEST,M3.5.0,M10.5.0/3", "Central Europe — Paris, Berlin, Madrid, Rome", ["Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam", "Europe/Brussels", "Europe/Vienna", "Europe/Zurich", "Europe/Stockholm", "Europe/Oslo", "Europe/Copenhagen", "Europe/Prague", "Europe/Warsaw"]],
+  ["EET-2EEST,M3.5.0/3,M10.5.0/4", "Eastern Europe — Athens, Helsinki, Kyiv", ["Europe/Athens", "Europe/Helsinki", "Europe/Kyiv", "Europe/Kiev", "Europe/Bucharest", "Europe/Sofia"]],
+  ["EET-2", "Cairo", ["Africa/Cairo"]],
+  ["<+03>-3", "UTC+3 — Istanbul, Riyadh, Moscow, Nairobi", ["Europe/Istanbul", "Asia/Riyadh", "Europe/Moscow", "Asia/Qatar", "Asia/Kuwait", "Asia/Baghdad", "Africa/Nairobi"]],
+  ["<+04>-4", "UTC+4 — Dubai, Abu Dhabi, Muscat", ["Asia/Dubai", "Asia/Muscat", "Asia/Baku", "Asia/Tbilisi"]],
+  ["<+05>-5", "UTC+5 — Karachi, Tashkent", ["Asia/Karachi", "Asia/Tashkent"]],
+  ["IST-5:30", "India", ["Asia/Kolkata", "Asia/Calcutta"]],
+  ["<+07>-7", "UTC+7 — Bangkok, Jakarta, Ho Chi Minh City", ["Asia/Bangkok", "Asia/Jakarta", "Asia/Ho_Chi_Minh"]],
+  ["<+08>-8", "UTC+8 — Singapore, Hong Kong, Beijing, Perth", ["Asia/Singapore", "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Taipei", "Asia/Manila", "Australia/Perth", "Asia/Kuala_Lumpur"]],
+  ["<+09>-9", "UTC+9 — Tokyo, Seoul", ["Asia/Tokyo", "Asia/Seoul"]],
+  ["AEST-10AEDT,M10.1.0,M4.1.0/3", "Sydney, Melbourne, Canberra", ["Australia/Sydney", "Australia/Melbourne", "Australia/Canberra", "Australia/Hobart"]],
+  ["AEST-10", "Brisbane", ["Australia/Brisbane"]],
+  ["NZST-12NZDT,M9.5.0,M4.1.0/3", "New Zealand", ["Pacific/Auckland"]],
+  ["<-03>3", "UTC−3 — São Paulo, Buenos Aires", ["America/Sao_Paulo", "America/Argentina/Buenos_Aires", "America/Montevideo"]],
+  ["EST5EDT,M3.2.0,M11.1.0", "US & Canada Eastern", ["America/New_York", "America/Toronto", "America/Detroit"]],
+  ["CST6CDT,M3.2.0,M11.1.0", "US & Canada Central", ["America/Chicago", "America/Winnipeg"]],
+  ["CST6", "Mexico City", ["America/Mexico_City"]],
+  ["MST7MDT,M3.2.0,M11.1.0", "US & Canada Mountain", ["America/Denver", "America/Edmonton"]],
+  ["MST7", "Arizona", ["America/Phoenix"]],
+  ["PST8PDT,M3.2.0,M11.1.0", "US & Canada Pacific", ["America/Los_Angeles", "America/Vancouver"]],
+  ["AKST9AKDT,M3.2.0,M11.1.0", "Alaska", ["America/Anchorage"]],
+  ["HST10", "Hawaii", ["Pacific/Honolulu"]],
+];
+
+function zonePicker(current, onpick) {
+  const browser = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
+  const suggested = ZONES.find((z) => z[2].includes(browser));
+  const known = ZONES.some((z) => z[0] === current);
+  const custom = h("input", { class: "input", value: known ? "" : current, placeholder: "POSIX TZ, e.g. CET-1CEST,M3.5.0,M10.5.0/3", style: `max-width:320px;${known ? "display:none" : ""}`,
+    onchange: (e) => e.target.value.trim() && onpick(e.target.value.trim()) });
+  const select = h("select", { class: "input", style: "width:auto;max-width:320px", onchange: (e) => {
+    if (e.target.value === "custom") { custom.style.display = ""; custom.focus(); } else onpick(e.target.value);
+  } },
+  ZONES.map(([tz, label]) => h("option", { value: tz, selected: tz === current }, label)),
+  h("option", { value: "custom", selected: !known }, "Other (POSIX rule)…"));
+  return h("div", { class: "stack", style: "gap:8px;align-items:flex-end" }, select, custom,
+    suggested && suggested[0] !== current && btn(`Use this browser’s zone (${browser})`, () => onpick(suggested[0]), "ghost small"));
+}
+
 function pageSettings() {
   const s = S.settings;
   const run = async (fn) => {
@@ -1023,9 +1067,11 @@ function pageSettings() {
         setting("Connect automatically", "Hold the link open for instant brews; reconnect when it drops.", sw(s.machine.auto_connect, (v) => patch({ machine: { auto_connect: v } }), "Connect automatically")),
         setting("Demo mode", "Drive a built-in simulated machine — try everything without coffee.", sw(s.machine.simulator, (v) => patch({ machine: { simulator: v } }), "Demo mode"))),
       esp && h("div", { class: "card pad stack" },
-        h("h3", {}, "Wi-Fi"),
+        h("h3", {}, "Wi-Fi & clock"),
+        h("p", { class: "muted small" }, "Without a network the screen hosts its own Wi-Fi (shown under Settings → Admin panel on the screen)."),
         h("div", { class: "grid two" }, h("label", { class: "field" }, "Network", ssid), h("label", { class: "field" }, "Password", pw)),
-        h("div", {}, btn("Save Wi-Fi", () => patch({ wifi: { ssid: ssid.value, password: pw.value || undefined } }), "secondary small", "wifi"))),
+        h("div", {}, btn("Save Wi-Fi", () => patch({ wifi: { ssid: ssid.value, password: pw.value || undefined } }), "secondary small", "wifi")),
+        setting("Time zone", "The clock is set from the internet once the screen is online.", zonePicker(s.timezone, (tz) => patch({ timezone: tz })))),
       h("div", { class: "card pad" },
         h("h3", {}, "Backup & device"),
         setting("Backup", "Recipes, presets and settings (no PINs, no Wi-Fi password).",

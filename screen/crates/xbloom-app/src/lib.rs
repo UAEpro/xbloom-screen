@@ -32,5 +32,5 @@ pub mod recipes;
 pub mod settings;
 pub mod util;
 
-pub use app::{App, Data, Event, PinPurpose, Platform, PlatformInfo, ToastKind, VideoProfile};
+pub use app::{App, Data, Event, Hotspot, PinPurpose, Platform, PlatformInfo, ToastKind, VideoProfile};
 pub use controller::{BrewStatus, Link, MachineStatus};

@@ -137,6 +137,8 @@ export global AppState {
     in property <bool> has-user-pin: false;
     in property <image> admin-qr;
     in property <string> admin-url: "";
+    // Set while the device hosts its own setup Wi-Fi: how to join it (the QR then joins it).
+    in property <string> admin-hint: "";
     in property <string> version: "";
     in property <string> platform: "";
     in property <string> storage: "";

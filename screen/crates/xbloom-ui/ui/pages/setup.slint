@@ -180,6 +180,7 @@ export component SetupPage inherits Rectangle {
                     wrap: word-wrap;
                 }
                 Chip { has-icon: true; icon: Icons.wifi; text: AppState.admin-url; fill: Theme.accent-soft; fg: Theme.accent-strong; }
+                if AppState.admin-hint != "": Text { text: AppState.admin-hint; color: Theme.text-2; font-size: Theme.fs-small; wrap: word-wrap; }
                 Rectangle { height: 6px; }
                 Button { text: "Start brewing"; has-icon: true; icon: Icons.coffee; clicked => { AppState.setup-finish(); } }
             }

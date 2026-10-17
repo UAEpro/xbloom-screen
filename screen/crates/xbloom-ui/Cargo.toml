@@ -34,7 +34,7 @@ log = { workspace = true }
 png = { version = "0.18", optional = true }
 
 [build-dependencies]
-slint-build = "1.18"
+slint-build = { version = "1.18", features = ["sdf-fonts"] }
 
 [dev-dependencies]
 jpeg-encoder = "0.6"

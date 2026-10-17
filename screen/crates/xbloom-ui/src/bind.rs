@@ -314,17 +314,27 @@ impl Ui {
         };
         let storage = self.app.hooks().storage().map_or_else(
             || "—".to_string(),
-            |(free, total)| format!("{:.1} GB free of {:.1} GB", free as f64 / 1e9, total as f64 / 1e9),
+            |(free, total)| format!("{} free of {}", format::bytes(free), format::bytes(total)),
         );
         let url = self.app.hooks().admin_urls().into_iter().next().unwrap_or_default();
+        // On its own setup Wi-Fi the QR code joins the network; otherwise it opens the panel.
+        let hotspot = self.app.hooks().setup_hotspot();
+        let (qr_text, hint) = match &hotspot {
+            Some(h) => (
+                qr::wifi_join(&h.ssid, &h.password),
+                format!("Scan to join the Wi-Fi “{}” (password {}), then open the address above.", h.ssid, h.password),
+            ),
+            None => (url.clone(), String::new()),
+        };
         self.with(|ui| {
             let g = ui.global::<AppState>();
             g.set_version(p.version.as_str().into());
             g.set_platform(format!("{platform} · {}×{}", p.screen.0, p.screen.1).into());
             g.set_storage(storage.into());
-            if g.get_admin_url().as_str() != url {
-                g.set_admin_qr(if url.is_empty() { Image::default() } else { qr::qr_image(&url) });
+            if g.get_admin_url().as_str() != url || g.get_admin_hint().as_str() != hint {
+                g.set_admin_qr(if qr_text.is_empty() { Image::default() } else { qr::qr_image(&qr_text) });
                 g.set_admin_url(if url.is_empty() { "No network yet".into() } else { url.as_str().into() });
+                g.set_admin_hint(hint.as_str().into());
             }
         });
     }
@@ -486,7 +496,8 @@ impl Ui {
 
     fn idle_tick(&mut self) {
         self.tick_clock();
-        if self.last_device_refresh.elapsed() > Duration::from_secs(30) {
+        // Addresses change as Wi-Fi comes and goes (and the ESP32's hotspot with it).
+        if self.last_device_refresh.elapsed() > Duration::from_secs(5) {
             self.load_device();
             // The automatic theme follows the clock.
             if self.app.settings().appearance.theme == ThemeMode::Auto {
@@ -792,6 +803,9 @@ impl Ui {
     // ── actions ───────────────────────────────────────────────────────────────────────
 
     fn navigate(&mut self, page: Page) {
+        if page == Page::Settings {
+            self.load_device();
+        }
         let Some(ui) = self.weak.upgrade() else { return };
         let g = ui.global::<AppState>();
         if page != Page::Settings {

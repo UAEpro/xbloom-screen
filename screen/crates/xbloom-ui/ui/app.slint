@@ -58,4 +58,13 @@ export component AppWindow inherits Window {
     if AppState.locked && !AppState.saver-active: LockScreen {}
     if AppState.saver-active: Screensaver {}
     if AppState.asleep: Sleep {}
+
+    // Microcontroller builds embed glyphs only for ASCII and the characters that appear in
+    // these .slint files. This invisible line adds Latin-1 and common typography, so recipe
+    // names and messages from the app ("Café", "93 °C", "1–2 min", “quotes”) render on the
+    // ESP32 too. (Hosted builds load the full fonts and don't need it.)
+    Text {
+        visible: false;
+        text: "¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ–—‘’‚“”„•…‹›€™←↑→↓≈≤≥−✓";
+    }
 }

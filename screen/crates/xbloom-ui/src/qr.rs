@@ -27,3 +27,20 @@ pub fn qr_pixels(text: &str, scale: u32) -> Option<SharedPixelBuffer<Rgb8Pixel>>
 pub fn qr_image(text: &str) -> Image {
     qr_pixels(text, 6).map(Image::from_rgb8).unwrap_or_default()
 }
+
+/// The standard "join this Wi-Fi" QR payload (`WIFI:T:WPA;S:…;P:…;;`) that phone cameras
+/// understand.
+pub fn wifi_join(ssid: &str, password: &str) -> String {
+    fn esc(s: &str) -> String {
+        s.chars().flat_map(|c| if "\\;,:\"".contains(c) { vec!['\\', c] } else { vec![c] }).collect()
+    }
+    format!("WIFI:T:WPA;S:{};P:{};;", esc(ssid), esc(password))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn wifi_payload_escapes_specials() {
+        assert_eq!(super::wifi_join("xBloom-1A2B", "pa;ss"), "WIFI:T:WPA;S:xBloom-1A2B;P:pa\\;ss;;");
+    }
+}

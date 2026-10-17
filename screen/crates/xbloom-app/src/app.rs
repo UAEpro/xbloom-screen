@@ -138,6 +138,20 @@ pub trait Platform: Send + Sync {
     fn admin_urls(&self) -> Vec<String> {
         Vec::new()
     }
+    /// The device's own setup hotspot, while it is the way to reach the admin panel (ESP32
+    /// without Wi-Fi credentials, or when the configured network is out of reach).
+    fn setup_hotspot(&self) -> Option<Hotspot> {
+        None
+    }
+}
+
+/// A Wi-Fi network the device is hosting, for the screen to show (text + join QR code).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hotspot {
+    /// Network name.
+    pub ssid: String,
+    /// WPA2 passphrase.
+    pub password: String,
 }
 
 /// A platform with no hooks (tests).
