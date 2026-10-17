@@ -105,6 +105,9 @@ pub struct PlatformInfo {
     pub max_upload: u64,
     /// The firmware / app version.
     pub version: String,
+    /// Whether the screen can be rotated from the settings (a kiosk Pi, the ESP32; not a
+    /// desktop window).
+    pub can_rotate: bool,
 }
 
 /// Screensaver video encoding target.
@@ -568,6 +571,7 @@ pub(crate) mod tests {
             history_points: 100,
             max_upload: 5_000_000,
             version: "test".into(),
+            can_rotate: false,
         }
     }
 

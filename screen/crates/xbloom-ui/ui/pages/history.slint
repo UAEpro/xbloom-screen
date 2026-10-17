@@ -1,6 +1,8 @@
-// Brew history: past brews (left) and the selected brew's curve (right).
+// Brew history: past brews and the selected brew's curve — side by side in landscape, the
+// curve above the list when stacked.
 
 import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
 import { AppState, Icons, HistoryRow } from "../state.slint";
 import { Icon, Card, BrewChart } from "../widgets.slint";
 import { Header } from "../chrome.slint";
@@ -9,7 +11,7 @@ component Row inherits Rectangle {
     in property <HistoryRow> entry;
     in property <bool> selected;
     callback clicked();
-    height: 66px;
+    height: Layout.compact ? 58px : 66px;
     border-radius: 14px;
     background: selected ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
     HorizontalLayout {
@@ -55,6 +57,51 @@ component Row inherits Rectangle {
     }
 }
 
+component BrewList inherits Card {
+    Flickable {
+        content-width: self.width;
+        content-height: list.preferred-height;
+        flicked => { AppState.activity(); }
+        list := VerticalLayout {
+            width: parent.width;
+            padding: Layout.compact ? 6px : 8px;
+            spacing: 2px;
+            for h[i] in AppState.history: Row {
+                entry: h;
+                selected: i == AppState.history-selected;
+                clicked => { AppState.select-history(i); }
+            }
+        }
+    }
+}
+
+component BrewDetail inherits Card {
+    VerticalLayout {
+        padding: Layout.card-pad;
+        spacing: Layout.compact ? 6px : 12px;
+        Text {
+            text: AppState.history-title;
+            color: Theme.text;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            overflow: elide;
+        }
+        Text {
+            text: AppState.history-detail;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            wrap: Layout.short ? no-wrap : word-wrap;
+            overflow: elide;
+        }
+        BrewChart {
+            vertical-stretch: 1;
+            water: AppState.history-water;
+            coffee: AppState.history-coffee;
+            show-target: false;
+        }
+    }
+}
+
 export component HistoryPage inherits Rectangle {
     VerticalLayout {
         Header {
@@ -65,6 +112,8 @@ export component HistoryPage inherits Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 alignment: center;
+                padding-left: Layout.pad-left;
+                padding-right: Layout.pad-right;
                 spacing: 10px;
                 Icon { x: (parent.width - self.width) / 2; source: Icons.history; tint: Theme.text-3; width: 44px; height: 44px; }
                 Text {
@@ -72,58 +121,28 @@ export component HistoryPage inherits Rectangle {
                     color: Theme.text-2;
                     font-size: Theme.fs-body;
                     horizontal-alignment: center;
+                    wrap: word-wrap;
                 }
             }
         }
+        // Placed by hand: a scrolling list would cap a layout's height at its content.
         if AppState.history.length > 0: Rectangle {
             vertical-stretch: 1;
-            list-card := Card {
-                x: 24px;
-                y: 0;
-                width: 320px;
-                height: parent.height - 20px;
-                Flickable {
-                    content-height: list.preferred-height;
-                    flicked => { AppState.activity(); }
-                    list := VerticalLayout {
-                        padding: 8px;
-                        spacing: 2px;
-                        for h[i] in AppState.history: Row {
-                            entry: h;
-                            selected: i == AppState.history-selected;
-                            clicked => { AppState.select-history(i); }
-                        }
-                    }
-                }
+            property <length> w: self.width - Layout.pad-left - Layout.pad-right;
+            property <length> h: self.height - Layout.pad-bottom;
+            property <length> list-w: clamp(w * 0.42, 180px, 360px);
+            property <length> detail-h: clamp(h * 0.5, 170px, 440px);
+            BrewList {
+                x: Layout.pad-left;
+                y: Layout.stack ? detail-h + Layout.gap : 0;
+                width: Layout.stack ? w : list-w;
+                height: Layout.stack ? h - detail-h - Layout.gap : h;
             }
-            Card {
-                x: list-card.x + list-card.width + 16px;
+            BrewDetail {
+                x: Layout.stack ? Layout.pad-left : Layout.pad-left + list-w + Layout.gap;
                 y: 0;
-                width: parent.width - self.x - 20px;
-                height: parent.height - 20px;
-                VerticalLayout {
-                    padding: 18px;
-                    spacing: 12px;
-                    Text {
-                        text: AppState.history-title;
-                        color: Theme.text;
-                        font-size: Theme.fs-h2;
-                        font-weight: 700;
-                        overflow: elide;
-                    }
-                    Text {
-                        text: AppState.history-detail;
-                        color: Theme.text-2;
-                        font-size: Theme.fs-small;
-                        wrap: word-wrap;
-                    }
-                    BrewChart {
-                        vertical-stretch: 1;
-                        water: AppState.history-water;
-                        coffee: AppState.history-coffee;
-                        show-target: false;
-                    }
-                }
+                width: Layout.stack ? w : w - list-w - Layout.gap;
+                height: Layout.stack ? detail-h : h;
             }
         }
     }

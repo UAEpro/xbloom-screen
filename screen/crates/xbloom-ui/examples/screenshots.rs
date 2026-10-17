@@ -3,6 +3,9 @@
 //!
 //! ```sh
 //! cargo run -p xbloom-ui --example screenshots --features screenshot -- docs/img/screen
+//! # another panel size (optionally with an interface scale), light theme only:
+//! cargo run -p xbloom-ui --example screenshots --features screenshot -- out 480x320 quick
+//! cargo run -p xbloom-ui --example screenshots --features screenshot -- out 1920x1080@1.5 quick
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -16,9 +19,6 @@ use xbloom_app::{App, Link, PlatformInfo, VideoProfile};
 use xbloom_core::sim::{SimConfig, SimTransport};
 use xbloom_ui::screenshot::Shooter;
 use xbloom_ui::{AppState, AppWindow, Overlay, Page};
-
-const W: u32 = 800;
-const H: u32 = 480;
 
 /// Flipped near the end to show an ESP32 on its own setup hotspot.
 static HOTSPOT: AtomicBool = AtomicBool::new(false);
@@ -80,6 +80,12 @@ fn wait(shot: &Shooter, what: &str, timeout: Duration, f: impl Fn() -> bool) {
 
 fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "screenshots".into()));
+    let size = std::env::args().nth(2).unwrap_or_else(|| "800x480".into());
+    let (size, scale) = size.split_once('@').map_or((size.as_str(), 1.0f32), |(s, f)| (s, f.parse().unwrap_or(1.0)));
+    let (w, h) =
+        size.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))).unwrap_or((800u32, 480u32));
+    // "quick": light theme only, no video screensaver.
+    let quick = std::env::args().nth(3).as_deref() == Some("quick");
     std::fs::create_dir_all(&out).unwrap();
     let data = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(data.path().join("media")).unwrap();
@@ -88,23 +94,25 @@ fn main() {
     let mut s = Settings { setup_complete: true, ..Settings::default() };
     s.machine.simulator = true;
     s.screensaver.video = Some("morning-pour.xbv".into());
+    s.appearance.ui_scale = (scale * 100.0).round() as u16;
     xbloom_app::util::write_json(&data.path().join("settings.json"), &s).unwrap();
     let platform = PlatformInfo {
         name: "raspberry-pi".into(),
-        screen: (W, H),
-        video: VideoProfile { width: W, height: H, fps: 24, quality: 0.8, max_seconds: 60 },
+        screen: (w, h),
+        video: VideoProfile { width: w, height: h, fps: 24, quality: 0.8, max_seconds: 60 },
         pin_iterations: 1000,
         history_max: 100,
         history_points: 300,
         max_upload: 200_000_000,
         version: env!("CARGO_PKG_VERSION").into(),
+        can_rotate: true,
     };
     let sim = SimConfig { speed: 12.0, grind_s: 18.0, cup_lift_s: 30.0, ..SimConfig::default() };
     let app: Arc<App> =
         App::start(data.path(), platform, Box::new(SimTransport::new(SimConfig::default())), Box::new(Hooks), sim);
     app.setup_admin_pin("2580").unwrap();
 
-    let shot = Shooter::install(W, H);
+    let shot = Shooter::install(w, h);
     let ui = AppWindow::new().unwrap();
     xbloom_ui::bind(&ui, Arc::clone(&app));
     let g = ui.global::<AppState>();
@@ -115,7 +123,8 @@ fn main() {
     wait(&shot, "connected", Duration::from_secs(10), || app.machine_status().link == Link::Connected);
     shot.pump(Duration::from_millis(400));
 
-    for dark in [false, true] {
+    for dark in if quick { &[false][..] } else { &[false, true][..] } {
+        let dark = *dark;
         let sfx = if dark { "dark" } else { "light" };
         app.update_settings(|s| {
             s.appearance.theme =
@@ -140,6 +149,12 @@ fn main() {
         });
         shot.pump(Duration::from_millis(300));
         snap(&format!("brewing-{sfx}"));
+        if !dark {
+            g.set_overlay(Overlay::CancelBrew);
+            shot.pump(Duration::from_millis(200));
+            snap("stop-dialog");
+            g.set_overlay(Overlay::None);
+        }
         wait(&shot, "brew finished", Duration::from_secs(120), || g.get_brew().finished);
         shot.pump(Duration::from_millis(500));
         snap(&format!("brew-done-{sfx}"));
@@ -157,6 +172,13 @@ fn main() {
         g.invoke_navigate(Page::Presets);
         shot.pump(Duration::from_millis(300));
         snap(&format!("presets-{sfx}"));
+        if !dark {
+            g.set_picking_slot(1);
+            g.set_overlay(Overlay::PickRecipe);
+            shot.pump(Duration::from_millis(200));
+            snap("pick-recipe");
+            g.set_overlay(Overlay::None);
+        }
 
         // Settings are behind the admin PIN.
         g.invoke_navigate(Page::Settings);
@@ -199,7 +221,7 @@ fn main() {
         shot.pump(Duration::from_millis(400));
         snap(&format!("screensaver-clock-{sfx}"));
         xbloom_ui::bind::force_wake();
-        if !dark {
+        if !dark && !quick {
             app.update_settings(|s| s.screensaver.mode = ScreensaverMode::Video);
             shot.pump(Duration::from_millis(200));
             xbloom_ui::bind::force_screensaver();

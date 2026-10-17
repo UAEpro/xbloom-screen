@@ -1,6 +1,8 @@
-// App chrome: the navigation rail, page headers and the toast.
+// App chrome: the navigation (a rail in landscape, a tab bar in portrait), page headers and
+// the toast.
 
 import { Theme } from "theme.slint";
+import { Layout } from "layout.slint";
 import { AppState, Icons, Page, Overlay } from "state.slint";
 import { Icon, IconButton, StatusPill } from "widgets.slint";
 
@@ -8,23 +10,24 @@ component NavItem inherits Rectangle {
     in property <image> icon;
     in property <string> label;
     in property <bool> active;
+    in property <bool> show-label: true;
     callback clicked();
-    width: 64px;
-    height: 64px;
-    border-radius: 18px;
+    border-radius: min(18px, self.height / 3);
     background: active ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
     animate background { duration: 140ms; }
     VerticalLayout {
         alignment: center;
         spacing: 4px;
-        Icon {
-            x: (parent.width - self.width) / 2;
-            source: root.icon;
-            tint: root.active ? Theme.accent-strong : Theme.text-2;
-            width: 24px;
+        Rectangle {
             height: 24px;
+            Icon {
+                source: root.icon;
+                tint: root.active ? Theme.accent-strong : Theme.text-2;
+                width: 24px;
+                height: 24px;
+            }
         }
-        Text {
+        if root.show-label: Text {
             text: root.label;
             color: root.active ? Theme.accent-strong : Theme.text-2;
             font-size: Theme.fs-caption;
@@ -54,8 +57,10 @@ export component Logo inherits Rectangle {
     }
 }
 
+// Landscape navigation: a rail down the left edge (icon-only on short screens).
 export component NavRail inherits Rectangle {
-    width: 88px;
+    property <length> item: Layout.rail-labels ? 64px : 46px;
+    width: Layout.rail-width;
     background: Theme.surface;
     Rectangle {
         x: parent.width - 1px;
@@ -63,14 +68,17 @@ export component NavRail inherits Rectangle {
         background: Theme.border;
     }
     VerticalLayout {
-        padding-top: 16px;
+        padding-top: Layout.rail-logo ? 16px : 10px;
         padding-bottom: 16px;
-        spacing: 8px;
+        spacing: Layout.rail-labels ? 8px : 6px;
         alignment: start;
-        Logo { x: (parent.width - self.width) / 2; }
-        Rectangle { height: 14px; }
+        if Layout.rail-logo: Logo { x: (parent.width - self.width) / 2; }
+        if Layout.rail-logo: Rectangle { height: 14px; }
         NavItem {
             x: (parent.width - self.width) / 2;
+            width: root.item;
+            height: root.item;
+            show-label: Layout.rail-labels;
             icon: Icons.coffee;
             label: "Brew";
             active: AppState.page == Page.home || AppState.page == Page.recipe || AppState.page == Page.brewing;
@@ -78,6 +86,9 @@ export component NavRail inherits Rectangle {
         }
         NavItem {
             x: (parent.width - self.width) / 2;
+            width: root.item;
+            height: root.item;
+            show-label: Layout.rail-labels;
             icon: Icons.history;
             label: "History";
             active: AppState.page == Page.history;
@@ -85,6 +96,9 @@ export component NavRail inherits Rectangle {
         }
         NavItem {
             x: (parent.width - self.width) / 2;
+            width: root.item;
+            height: root.item;
+            show-label: Layout.rail-labels;
             icon: Icons.dial;
             label: "Dial";
             active: AppState.page == Page.presets;
@@ -92,6 +106,9 @@ export component NavRail inherits Rectangle {
         }
         NavItem {
             x: (parent.width - self.width) / 2;
+            width: root.item;
+            height: root.item;
+            show-label: Layout.rail-labels;
             icon: Icons.settings;
             label: "Settings";
             active: AppState.page == Page.settings;
@@ -100,11 +117,63 @@ export component NavRail inherits Rectangle {
     }
     if AppState.lock-mode > 0: IconButton {
         x: (parent.width - self.width) / 2;
-        y: parent.height - self.height - 18px;
+        y: parent.height - self.height - (Layout.rail-labels ? 18px : 10px);
+        size: Layout.rail-labels ? 48px : 40px;
         icon: Icons.lock;
         tint: Theme.text-2;
         fill: Theme.surface-2;
         clicked => { AppState.lock-now(); }
+    }
+}
+
+// Portrait navigation: a tab bar along the bottom edge.
+export component TabBar inherits Rectangle {
+    height: Layout.tabbar-height;
+    background: Theme.surface;
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.border;
+    }
+    HorizontalLayout {
+        padding: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 4px;
+        NavItem {
+            horizontal-stretch: 1;
+            icon: Icons.coffee;
+            label: "Brew";
+            active: AppState.page == Page.home || AppState.page == Page.recipe || AppState.page == Page.brewing;
+            clicked => { AppState.navigate(Page.home); }
+        }
+        NavItem {
+            horizontal-stretch: 1;
+            icon: Icons.history;
+            label: "History";
+            active: AppState.page == Page.history;
+            clicked => { AppState.navigate(Page.history); }
+        }
+        NavItem {
+            horizontal-stretch: 1;
+            icon: Icons.dial;
+            label: "Dial";
+            active: AppState.page == Page.presets;
+            clicked => { AppState.navigate(Page.presets); }
+        }
+        NavItem {
+            horizontal-stretch: 1;
+            icon: Icons.settings;
+            label: "Settings";
+            active: AppState.page == Page.settings;
+            clicked => { AppState.navigate(Page.settings); }
+        }
+        if AppState.lock-mode > 0: NavItem {
+            horizontal-stretch: 1;
+            icon: Icons.lock;
+            label: "Lock";
+            clicked => { AppState.lock-now(); }
+        }
     }
 }
 
@@ -113,18 +182,20 @@ export component Header inherits HorizontalLayout {
     in property <string> subtitle;
     in property <bool> show-back: false;
     callback back();
-    height: 76px;
-    padding-left: 24px;
-    padding-right: 20px;
-    spacing: 14px;
+    height: Layout.header-height;
+    padding-left: Layout.pad-left;
+    padding-right: Layout.pad-right;
+    spacing: Layout.compact ? 10px : 14px;
     if root.show-back: IconButton {
         y: (parent.height - self.height) / 2;
+        size: Layout.compact ? 40px : 48px;
         icon: Icons.back;
         clicked => { root.back(); }
     }
     VerticalLayout {
         alignment: center;
         spacing: 2px;
+        horizontal-stretch: 1;
         Text {
             text: root.title;
             color: Theme.text;
@@ -139,9 +210,9 @@ export component Header inherits HorizontalLayout {
             overflow: elide;
         }
     }
-    Rectangle { horizontal-stretch: 1; }
     StatusPill {
         y: (parent.height - self.height) / 2;
+        compact: Layout.content-width < 440px;
         clicked => { AppState.overlay = Overlay.machine; }
     }
     Text {
@@ -150,7 +221,7 @@ export component Header inherits HorizontalLayout {
         font-size: Theme.fs-h2;
         font-weight: 700;
         vertical-alignment: center;
-        min-width: 64px;
+        min-width: Layout.compact ? 48px : 64px;
         horizontal-alignment: right;
     }
 }

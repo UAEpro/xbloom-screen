@@ -31,7 +31,9 @@ getrandom = "0.4"
 embuild = "0.33"
 
 [profile.release]
-opt-level = "s"
+# Smallest code: it runs from PSRAM (XiP), so every byte of code is a byte less for the frame
+# buffers and the heap. "z" is ~680 KB smaller than "s" for this app.
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 debug = false

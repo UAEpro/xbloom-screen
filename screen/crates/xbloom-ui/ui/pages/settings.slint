@@ -1,33 +1,51 @@
 // On-device admin settings (behind the admin PIN). Recipes, videos and photos are managed
 // from the web admin panel (phone/laptop) — the "Admin panel" tab shows its QR code.
+//
+// Tabs sit down the left (with labels on regular screens, icons only on short ones) or, when
+// stacked (portrait, square), in a scrolling strip above the card.
 
 import { Theme, Accents } from "../theme.slint";
+import { Layout } from "../layout.slint";
 import { AppState, Icons, LinkState, ScanRow, MediaRow } from "../state.slint";
 import { Icon, Card, Button, ButtonKind, Toggle, Segmented, Stepper, Slider, SettingRow, SectionTitle, Chip } from "../widgets.slint";
 import { Header } from "../chrome.slint";
+
+enum TabLook { side, icon, chip }
 
 component Tab inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> active;
+    in property <TabLook> look: TabLook.side;
     callback clicked();
-    height: 50px;
-    border-radius: 14px;
-    background: active ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
-    HorizontalLayout {
+    height: look == TabLook.chip ? 42px : look == TabLook.icon ? 46px : 50px;
+    width: look == TabLook.icon ? 50px : look == TabLook.chip ? row.preferred-width : self.preferred-width;
+    border-radius: look == TabLook.chip ? 21px : 14px;
+    background: active ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : look == TabLook.chip ? Theme.surface : transparent;
+    border-width: look == TabLook.chip && !active ? 1px : 0px;
+    border-color: Theme.border;
+    if root.look == TabLook.icon: Icon {
+        source: root.icon;
+        tint: root.active ? Theme.accent-strong : Theme.text-2;
+        width: 22px;
+        height: 22px;
+    }
+    row := HorizontalLayout {
+        visible: root.look != TabLook.icon;
         padding-left: 14px;
-        spacing: 12px;
+        padding-right: root.look == TabLook.chip ? 16px : 0px;
+        spacing: root.look == TabLook.chip ? 8px : 12px;
         Icon {
             y: (parent.height - self.height) / 2;
             source: root.icon;
             tint: root.active ? Theme.accent-strong : Theme.text-2;
-            width: 20px;
-            height: 20px;
+            width: root.look == TabLook.chip ? 18px : 20px;
+            height: self.width;
         }
         Text {
             text: root.label;
             color: root.active ? Theme.accent-strong : Theme.text;
-            font-size: Theme.fs-body;
+            font-size: root.look == TabLook.chip ? Theme.fs-small : Theme.fs-body;
             font-weight: root.active ? 700 : 600;
             vertical-alignment: center;
         }
@@ -41,17 +59,17 @@ component Tab inherits Rectangle {
 }
 
 component MachineTab inherits VerticalLayout {
-    spacing: 14px;
+    spacing: Layout.compact ? 10px : 14px;
     Card {
-        height: 104px;
+        height: Layout.compact ? 84px : 104px;
         HorizontalLayout {
-            padding: 18px;
-            spacing: 16px;
+            padding: Layout.compact ? 12px : 18px;
+            spacing: Layout.compact ? 10px : 16px;
             Rectangle {
                 y: (parent.height - self.height) / 2;
-                width: 56px;
-                height: 56px;
-                border-radius: 28px;
+                width: Layout.compact ? 44px : 56px;
+                height: self.width;
+                border-radius: self.width / 2;
                 background: AppState.link == LinkState.connected ? Theme.success-soft : Theme.surface-2;
                 Icon {
                     source: AppState.link == LinkState.connected ? Icons.bluetooth-on : Icons.bluetooth-off;
@@ -80,12 +98,16 @@ component MachineTab inherits VerticalLayout {
             }
             if AppState.link == LinkState.connected: Button {
                 y: (parent.height - self.height) / 2;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: Layout.compact ? 14px : 22px;
                 text: "Disconnect";
                 kind: ButtonKind.outline;
                 clicked => { AppState.disconnect(); }
             }
             if AppState.link != LinkState.connected && (AppState.paired || AppState.simulator): Button {
                 y: (parent.height - self.height) / 2;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: Layout.compact ? 14px : 22px;
                 text: AppState.link == LinkState.connecting ? "Connecting…" : "Connect";
                 enabled: AppState.link == LinkState.disconnected;
                 clicked => { AppState.connect(); }
@@ -131,12 +153,12 @@ component MachineTab inherits VerticalLayout {
     SettingRow {
         title: "Connect automatically";
         description: "Hold the link open for instant brews and reconnect when it drops.";
-        Toggle { y: (parent.height - self.height) / 2; checked: AppState.auto-connect; toggled(v) => { AppState.set-auto-connect(v); } }
+        Toggle { checked: AppState.auto-connect; toggled(v) => { AppState.set-auto-connect(v); } }
     }
     SettingRow {
         title: "Demo mode";
         description: "Use a built-in simulated machine — try everything with no coffee machine.";
-        Toggle { y: (parent.height - self.height) / 2; checked: AppState.simulator; toggled(v) => { AppState.set-simulator(v); } }
+        Toggle { checked: AppState.simulator; toggled(v) => { AppState.set-simulator(v); } }
     }
     if AppState.paired && !AppState.simulator: Button {
         text: "Forget this machine";
@@ -151,8 +173,7 @@ component DisplayTab inherits VerticalLayout {
         title: "Theme";
         description: "Auto switches to dark from 7 pm to 7 am.";
         Segmented {
-            y: (parent.height - self.height) / 2;
-            width: 270px;
+            preferred-width: 270px;
             options: ["Light", "Dark", "Auto"];
             selected: AppState.theme-mode;
             changed(i) => { AppState.set-theme(i); }
@@ -163,8 +184,8 @@ component DisplayTab inherits VerticalLayout {
         HorizontalLayout {
             spacing: 10px;
             alignment: end;
+            cross-axis-alignment: center;
             for c in Accents.list: Rectangle {
-                y: (parent.height - self.height) / 2;
                 width: 36px;
                 height: 36px;
                 border-radius: 18px;
@@ -178,8 +199,7 @@ component DisplayTab inherits VerticalLayout {
     SettingRow {
         title: "Brightness";
         Slider {
-            y: (parent.height - self.height) / 2;
-            width: 270px;
+            preferred-width: 270px;
             minimum: 10;
             maximum: 100;
             value: AppState.brightness;
@@ -187,8 +207,30 @@ component DisplayTab inherits VerticalLayout {
         }
     }
     SettingRow {
+        title: "Interface size";
+        description: "Bigger or smaller text and controls.";
+        Stepper {
+            value: AppState.ui-scale;
+            minimum: 70;
+            maximum: AppState.ui-scale-max;
+            step: 10;
+            unit: "%";
+            changed(v) => { AppState.set-ui-scale(v); }
+        }
+    }
+    if AppState.can-rotate: SettingRow {
+        title: "Rotation";
+        description: "Turn the picture and touch to match how the screen is mounted. The screen restarts to apply it.";
+        Segmented {
+            preferred-width: 270px;
+            options: ["0°", "90°", "180°", "270°"];
+            selected: AppState.rotation;
+            changed(i) => { AppState.set-rotation(i); }
+        }
+    }
+    SettingRow {
         title: "24-hour clock";
-        Toggle { y: (parent.height - self.height) / 2; checked: AppState.clock-24h; toggled(v) => { AppState.set-clock-24h(v); } }
+        Toggle { checked: AppState.clock-24h; toggled(v) => { AppState.set-clock-24h(v); } }
     }
 }
 
@@ -198,8 +240,7 @@ component SaverTab inherits VerticalLayout {
         title: "Screensaver";
         description: "Videos and photos are uploaded from the admin panel.";
         Segmented {
-            y: (parent.height - self.height) / 2;
-            width: 310px;
+            preferred-width: 310px;
             options: ["Off", "Clock", "Video", "Photos"];
             selected: AppState.saver-mode;
             changed(i) => { AppState.set-saver-mode(i); }
@@ -218,7 +259,7 @@ component SaverTab inherits VerticalLayout {
     SettingRow {
         title: "Show the clock";
         description: "Over videos and photos.";
-        Toggle { y: (parent.height - self.height) / 2; checked: AppState.saver-clock-overlay; toggled(v) => { AppState.set-saver-clock(v); } }
+        Toggle { checked: AppState.saver-clock-overlay; toggled(v) => { AppState.set-saver-clock(v); } }
     }
     SectionTitle { text: "VIDEO"; height: 34px; vertical-alignment: bottom; }
     if AppState.media.length == 0: Text {
@@ -251,8 +292,7 @@ component SecurityTab inherits VerticalLayout {
             : AppState.lock-mode == 1 ? "Browsing is free; starting a brew asks for a PIN."
             : "The screen locks after the screensaver; a PIN unlocks it.";
         Segmented {
-            y: (parent.height - self.height) / 2;
-            width: 236px;
+            preferred-width: 236px;
             options: ["Off", "Brew", "Screen"];
             selected: AppState.lock-mode;
             changed(i) => { AppState.set-lock-mode(i); }
@@ -264,8 +304,9 @@ component SecurityTab inherits VerticalLayout {
         HorizontalLayout {
             spacing: 8px;
             alignment: end;
-            if AppState.has-user-pin: Button { y: (parent.height - self.height) / 2; text: "Remove"; kind: ButtonKind.ghost; min-height: 44px; clicked => { AppState.clear-user-pin(); } }
-            Button { y: (parent.height - self.height) / 2; text: AppState.has-user-pin ? "Change" : "Set PIN"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.set-user-pin(); } }
+            cross-axis-alignment: center;
+            if AppState.has-user-pin: Button { text: "Remove"; kind: ButtonKind.ghost; min-height: 44px; clicked => { AppState.clear-user-pin(); } }
+            Button { text: AppState.has-user-pin ? "Change" : "Set PIN"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.set-user-pin(); } }
         }
     }
     SettingRow {
@@ -281,7 +322,7 @@ component SecurityTab inherits VerticalLayout {
     SettingRow {
         title: "Remote start";
         description: "Show “Hold to brew”. Off: the screen only loads recipes and you press start on the machine.";
-        Toggle { y: (parent.height - self.height) / 2; checked: AppState.allow-remote-start; toggled(v) => { AppState.set-remote-start(v); } }
+        Toggle { checked: AppState.allow-remote-start; toggled(v) => { AppState.set-remote-start(v); } }
     }
     SettingRow {
         title: "Hold to brew for";
@@ -297,56 +338,69 @@ component SecurityTab inherits VerticalLayout {
     SettingRow {
         title: "Admin PIN";
         description: "Protects these settings and the admin panel.";
-        Button { y: (parent.height - self.height) / 2; text: "Change"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.change-admin-pin(); } }
+        Button { text: "Change"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.change-admin-pin(); } }
     }
 }
 
-component AdminTab inherits HorizontalLayout {
-    spacing: 18px;
-    Rectangle {
-        width: 168px;
-        height: 168px;
-        border-radius: 16px;
-        background: #ffffff;
-        border-width: 1px;
-        border-color: Theme.border;
-        Image {
-            width: 148px;
-            height: 148px;
-            source: AppState.admin-qr;
-            image-rendering: pixelated;
-        }
+component AdminText inherits VerticalLayout {
+    spacing: 8px;
+    alignment: start;
+    Text {
+        text: "Manage from your phone";
+        color: Theme.text;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+        wrap: word-wrap;
     }
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: 8px;
-        alignment: start;
-        Text {
-            text: "Manage from your phone";
-            color: Theme.text;
-            font-size: Theme.fs-body;
-            font-weight: 700;
-            wrap: word-wrap;
-        }
-        Text {
-            text: "Open the address on any phone or laptop on the same network and sign in with the admin PIN: edit and import recipes, upload screensaver videos and photos, set the dial presets, download your history.";
-            color: Theme.text-2;
-            font-size: Theme.fs-small;
-            wrap: word-wrap;
-        }
-        Text {
-            text: AppState.admin-url;
-            color: Theme.accent-strong;
-            font-size: Theme.fs-body;
-            font-weight: 700;
-            wrap: word-wrap;
-        }
-        if AppState.admin-hint != "": Text {
-            text: AppState.admin-hint;
-            color: Theme.text-2;
-            font-size: Theme.fs-small;
-            wrap: word-wrap;
-        }
+    Text {
+        text: "Open the address on any phone or laptop on the same network and sign in with the admin PIN: edit and import recipes, upload screensaver videos and photos, set the dial presets, download your history.";
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+    Text {
+        text: AppState.admin-url;
+        color: Theme.accent-strong;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+        wrap: word-wrap;
+    }
+    if AppState.admin-hint != "": Text {
+        text: AppState.admin-hint;
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+}
+
+component AdminQr inherits Rectangle {
+    in property <length> size: 168px;
+    width: size;
+    height: size;
+    border-radius: 16px;
+    background: #ffffff;
+    border-width: 1px;
+    border-color: Theme.border;
+    Image {
+        width: root.size - 20px;
+        height: root.size - 20px;
+        source: AppState.admin-qr;
+        image-rendering: pixelated;
+    }
+}
+
+component AdminTab inherits VerticalLayout {
+    property <bool> side: Layout.settings-inner >= 380px;
+    property <length> qr: Layout.compact ? 136px : 168px;
+    if root.side: HorizontalLayout {
+        spacing: Layout.compact ? 12px : 18px;
+        AdminQr { size: root.qr; }
+        AdminText { horizontal-stretch: 1; }
+    }
+    if !root.side: VerticalLayout {
+        spacing: 12px;
+        AdminQr { x: (parent.width - self.width) / 2; size: root.qr; }
+        AdminText {}
     }
 }
 
@@ -359,7 +413,7 @@ component AboutTab inherits VerticalLayout {
     SettingRow {
         title: "Restart";
         description: "Restart the screen app.";
-        Button { y: (parent.height - self.height) / 2; text: "Restart"; kind: ButtonKind.outline; min-height: 44px; has-icon: true; icon: Icons.power; clicked => { AppState.restart(); } }
+        Button { text: "Restart"; kind: ButtonKind.outline; min-height: 44px; has-icon: true; icon: Icons.power; clicked => { AppState.restart(); } }
     }
     Text {
         text: "Unofficial — not affiliated with xBloom. Loading a recipe only arms the machine; a brew starts only when you hold “Hold to brew” or press start on the machine.";
@@ -370,33 +424,69 @@ component AboutTab inherits VerticalLayout {
 }
 
 export component SettingsPage inherits Rectangle {
+    property <TabLook> look: Layout.settings-tabs == 2 ? TabLook.chip : Layout.settings-tabs == 0 ? TabLook.side : TabLook.icon;
+    property <length> tabs-w: look == TabLook.side ? 186px : look == TabLook.icon ? 50px : 0px;
+    property <[string]> names: ["Machine", "Display", "Screensaver", "Security", "Admin panel", "About"];
+    property <[image]> icons: [Icons.bluetooth, Icons.sun, Icons.film, Icons.shield, Icons.qr, Icons.info];
+
     VerticalLayout {
         Header { title: "Settings"; subtitle: AppState.device-name; }
+        if root.look == TabLook.chip: Flickable {
+            height: 52px;
+            min-width: 0px;
+            content-width: strip.preferred-width;
+            strip := HorizontalLayout {
+                padding-left: Layout.pad-left;
+                padding-right: Layout.pad-right;
+                padding-bottom: 10px;
+                spacing: 8px;
+                alignment: start;
+                for name[i] in root.names: Tab {
+                    look: TabLook.chip;
+                    label: name;
+                    icon: root.icons[i];
+                    active: AppState.settings-tab == i;
+                    clicked => { AppState.settings-tab = i; }
+                }
+            }
+        }
         HorizontalLayout {
             vertical-stretch: 1;
-            padding-left: 24px;
-            padding-right: 20px;
-            padding-bottom: 20px;
-            spacing: 16px;
-            VerticalLayout {
-                width: 186px;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            padding-bottom: Layout.pad-bottom;
+            spacing: Layout.gap;
+            if root.look != TabLook.chip: VerticalLayout {
+                width: root.tabs-w;
                 spacing: 4px;
                 alignment: start;
-                Tab { label: "Machine"; icon: Icons.bluetooth; active: AppState.settings-tab == 0; clicked => { AppState.settings-tab = 0; } }
-                Tab { label: "Display"; icon: Icons.sun; active: AppState.settings-tab == 1; clicked => { AppState.settings-tab = 1; } }
-                Tab { label: "Screensaver"; icon: Icons.film; active: AppState.settings-tab == 2; clicked => { AppState.settings-tab = 2; } }
-                Tab { label: "Security"; icon: Icons.shield; active: AppState.settings-tab == 3; clicked => { AppState.settings-tab = 3; } }
-                Tab { label: "Admin panel"; icon: Icons.qr; active: AppState.settings-tab == 4; clicked => { AppState.settings-tab = 4; } }
-                Tab { label: "About"; icon: Icons.info; active: AppState.settings-tab == 5; clicked => { AppState.settings-tab = 5; } }
+                for name[i] in root.names: Tab {
+                    look: root.look;
+                    label: name;
+                    icon: root.icons[i];
+                    active: AppState.settings-tab == i;
+                    clicked => { AppState.settings-tab = i; }
+                }
             }
             Card {
                 horizontal-stretch: 1;
                 Flickable {
+                    content-width: self.width;
                     content-height: content.preferred-height;
                     flicked => { AppState.activity(); }
                     content := VerticalLayout {
-                        padding: 18px;
+                        width: parent.width;
+                        padding: Layout.card-pad;
                         padding-top: 8px;
+                        // Icon-only tabs: name the section.
+                        if root.look == TabLook.icon: Text {
+                            text: root.names[AppState.settings-tab];
+                            color: Theme.text;
+                            font-size: Theme.fs-h2;
+                            font-weight: 700;
+                            height: 36px;
+                            vertical-alignment: center;
+                        }
                         if AppState.settings-tab == 0: MachineTab {}
                         if AppState.settings-tab == 1: DisplayTab {}
                         if AppState.settings-tab == 2: SaverTab {}

@@ -1,9 +1,11 @@
 // The xBloom screen — root window. Designed at 800 × 480 (the Raspberry Pi 7" panel and
-// the common ESP32-S3 4.3" boards); layouts stretch to larger panels.
+// the common ESP32-S3 4.3" boards) and responsive from 480 × 272 up, landscape or portrait:
+// see layout.slint for the size classes.
 
 import { Theme } from "theme.slint";
+import { Layout } from "layout.slint";
 import { AppState, Page, Overlay } from "state.slint";
-import { NavRail, ToastView } from "chrome.slint";
+import { NavRail, TabBar, ToastView } from "chrome.slint";
 import { HomePage } from "pages/home.slint";
 import { RecipePage } from "pages/recipe.slint";
 import { BrewingPage } from "pages/brewing.slint";
@@ -14,32 +16,47 @@ import { SetupPage } from "pages/setup.slint";
 import { LockScreen, Screensaver, Sleep } from "pages/lock.slint";
 import { PinOverlay, CancelBrewOverlay, MachineSheet, PickRecipeOverlay } from "overlays.slint";
 
-export { AppState, Theme, Page, Overlay }
+export { AppState, Theme, Layout, Page, Overlay }
 export { LinkState, RecipeCard, PourInfo, BrewInfo, HistoryRow, SlotRow, ScanRow, MediaRow, ToastInfo } from "state.slint";
+
+// The current page, in the area the navigation leaves free.
+component PageHost inherits Rectangle {
+    // Taps on empty space still count as activity (idle timer).
+    TouchArea { clicked => { AppState.activity(); } }
+    if AppState.page == Page.home: HomePage {}
+    if AppState.page == Page.recipe: RecipePage {}
+    if AppState.page == Page.brewing: BrewingPage {}
+    if AppState.page == Page.history: HistoryPage {}
+    if AppState.page == Page.presets: PresetsPage {}
+    if AppState.page == Page.settings: SettingsPage {}
+}
 
 export component AppWindow inherits Window {
     preferred-width: 800px;
     preferred-height: 480px;
-    min-width: 640px;
-    min-height: 400px;
+    min-width: 320px;
+    min-height: 272px;
     title: "xBloom Screen";
     background: Theme.bg;
     default-font-family: "Inter";
     default-font-size: Theme.fs-body;
 
-    if !AppState.needs-setup: HorizontalLayout {
-        NavRail {}
-        content := Rectangle {
-            horizontal-stretch: 1;
-            // Taps on empty space still count as activity (idle timer).
-            TouchArea { clicked => { AppState.activity(); } }
-            if AppState.page == Page.home: HomePage {}
-            if AppState.page == Page.recipe: RecipePage {}
-            if AppState.page == Page.brewing: BrewingPage {}
-            if AppState.page == Page.history: HistoryPage {}
-            if AppState.page == Page.presets: PresetsPage {}
-            if AppState.page == Page.settings: SettingsPage {}
+    init => {
+        Layout.width = self.width;
+        Layout.height = self.height;
+    }
+    changed width => { Layout.width = self.width; }
+    changed height => { Layout.height = self.height; }
+
+    if !AppState.needs-setup: Rectangle {
+        PageHost {
+            x: Layout.rail-width;
+            y: 0;
+            width: parent.width - Layout.rail-width;
+            height: parent.height - Layout.tabbar-height;
         }
+        if !Layout.portrait: NavRail { x: 0; y: 0; height: parent.height; }
+        if Layout.portrait: TabBar { x: 0; y: parent.height - self.height; width: parent.width; }
     }
     if AppState.needs-setup: SetupPage {}
 
@@ -49,9 +66,9 @@ export component AppWindow inherits Window {
     if AppState.overlay == Overlay.pick-recipe: PickRecipeOverlay {}
 
     ToastView {
-        limit: root.width - 48px;
+        limit: root.width - 32px;
         x: (root.width - self.width) / 2;
-        y: AppState.toast.visible ? root.height - self.height - 22px : root.height + 10px;
+        y: AppState.toast.visible ? root.height - Layout.tabbar-height - self.height - (Layout.compact ? 12px : 22px) : root.height + 10px;
         animate y { duration: 220ms; easing: ease-out; }
     }
 

@@ -9,7 +9,9 @@ repository.workspace = true
 
 [features]
 default = ["backend-linuxkms", "backend-winit"]
-backend-linuxkms = ["xbloom-ui/backend-linuxkms"]
+# The touch hook that rotates touchscreens uses Slint's libinput API ("09" is its historical
+# name; it is the input 0.10 crate Slint itself links).
+backend-linuxkms = ["xbloom-ui/backend-linuxkms", "slint/unstable-libinput-09", "dep:input"]
 backend-winit = ["xbloom-ui/backend-winit"]
 gpu = ["xbloom-ui/gpu"]
 
@@ -25,3 +27,6 @@ tiny_http = "0.12"
 libc = "0.2"
 log = { workspace = true }
 env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+input = { version = "0.10", default-features = false, optional = true }

@@ -1,6 +1,8 @@
 // Modal overlays: PIN entry, stop-brew confirmation, the machine sheet, the recipe picker.
+// Each fits the window: at most its design size, at least 12 px clear of the edges.
 
 import { Theme } from "theme.slint";
+import { Layout } from "layout.slint";
 import { AppState, Icons, Overlay, LinkState } from "state.slint";
 import { Icon, Card, Button, ButtonKind, PinPad, IconButton } from "widgets.slint";
 
@@ -10,24 +12,45 @@ component Scrim inherits Rectangle {
     TouchArea { clicked => { root.dismiss(); } }
 }
 
+component PinHeading inherits HorizontalLayout {
+    in property <bool> close: true;
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 2px;
+        Text { text: AppState.pin-title; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; wrap: word-wrap; }
+        Text { text: AppState.pin-subtitle; color: Theme.text-2; font-size: Theme.fs-small; wrap: word-wrap; }
+    }
+    if root.close: IconButton { icon: Icons.close; size: 40px; clicked => { AppState.pin-cancel(); } }
+}
+
 export component PinOverlay inherits Rectangle {
+    // Low landscape screens: heading beside the keypad, so the card fits the height.
+    property <bool> wide: !Layout.portrait && Layout.height < 470px;
     Scrim { dismiss => { AppState.pin-cancel(); } }
     Card {
-        width: 380px;
-        height: 456px;
+        width: min(root.wide ? 520px : 380px, parent.width - 24px);
+        height: min(root.wide ? parent.height - 24px : col.preferred-height, parent.height - 24px);
         // swallow taps on the card
         TouchArea {}
-        VerticalLayout {
+        col := VerticalLayout {
+            visible: !root.wide;
             padding: 20px;
             spacing: 10px;
-            HorizontalLayout {
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    spacing: 2px;
-                    Text { text: AppState.pin-title; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; }
-                    Text { text: AppState.pin-subtitle; color: Theme.text-2; font-size: Theme.fs-small; overflow: elide; }
-                }
-                IconButton { icon: Icons.close; size: 40px; clicked => { AppState.pin-cancel(); } }
+            PinHeading {}
+            PinPad {
+                error: AppState.pin-error;
+                length: AppState.pin-length;
+            }
+        }
+        if root.wide: HorizontalLayout {
+            padding: 14px;
+            spacing: 14px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 10px;
+                PinHeading { close: false; }
+                Rectangle { vertical-stretch: 1; }
+                Button { text: "Cancel"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.pin-cancel(); } }
             }
             PinPad {
                 error: AppState.pin-error;
@@ -40,12 +63,12 @@ export component PinOverlay inherits Rectangle {
 export component CancelBrewOverlay inherits Rectangle {
     Scrim { dismiss => { AppState.overlay = Overlay.none; } }
     Card {
-        width: 420px;
-        height: 236px;
+        width: min(420px, parent.width - 24px);
+        height: min(max(236px, stop.preferred-height), parent.height - 24px);
         TouchArea {}
-        VerticalLayout {
-            padding: 24px;
-            spacing: 12px;
+        stop := VerticalLayout {
+            padding: Layout.compact ? 16px : 24px;
+            spacing: Layout.compact ? 8px : 12px;
             HorizontalLayout {
                 spacing: 12px;
                 Icon { source: Icons.alert; tint: Theme.danger; width: 28px; height: 28px; }
@@ -54,20 +77,22 @@ export component CancelBrewOverlay inherits Rectangle {
             Text {
                 text: "The machine stops pouring and returns to idle. This brew won't be saved to history.";
                 color: Theme.text-2;
-                font-size: Theme.fs-body;
+                font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
                 wrap: word-wrap;
             }
             Rectangle { vertical-stretch: 1; }
             HorizontalLayout {
-                spacing: 12px;
+                spacing: Layout.compact ? 8px : 12px;
                 Button {
                     horizontal-stretch: 1;
+                    pad-x: 12px;
                     text: "Keep brewing";
                     kind: ButtonKind.secondary;
                     clicked => { AppState.overlay = Overlay.none; }
                 }
                 Button {
                     horizontal-stretch: 1;
+                    pad-x: 12px;
                     text: "Stop brew";
                     kind: ButtonKind.danger;
                     clicked => {
@@ -83,13 +108,13 @@ export component CancelBrewOverlay inherits Rectangle {
 export component MachineSheet inherits Rectangle {
     Scrim { dismiss => { AppState.overlay = Overlay.none; } }
     Card {
-        x: parent.width - self.width - 20px;
-        y: 72px;
-        width: 340px;
-        height: 214px;
+        x: parent.width - self.width - (Layout.compact ? 12px : 20px);
+        y: min(Layout.header-height - 4px, parent.height - self.height - 12px);
+        width: min(340px, parent.width - 24px);
+        height: min(max(214px, sheet.preferred-height), parent.height - 24px);
         TouchArea {}
-        VerticalLayout {
-            padding: 20px;
+        sheet := VerticalLayout {
+            padding: Layout.compact ? 16px : 20px;
             spacing: 10px;
             HorizontalLayout {
                 spacing: 12px;
@@ -141,11 +166,11 @@ export component MachineSheet inherits Rectangle {
 export component PickRecipeOverlay inherits Rectangle {
     Scrim { dismiss => { AppState.overlay = Overlay.none; } }
     Card {
-        width: 460px;
-        height: parent.height - 60px;
+        width: min(460px, parent.width - 24px);
+        height: min(parent.height - (Layout.compact ? 24px : 60px), 100px + AppState.recipes.length * 64px);
         TouchArea {}
         VerticalLayout {
-            padding: 18px;
+            padding: Layout.compact ? 12px : 18px;
             spacing: 10px;
             HorizontalLayout {
                 Text {
@@ -160,8 +185,10 @@ export component PickRecipeOverlay inherits Rectangle {
             }
             Flickable {
                 vertical-stretch: 1;
+                content-width: self.width;
                 content-height: list.preferred-height;
                 list := VerticalLayout {
+                    width: parent.width;
                     spacing: 6px;
                     for r in AppState.recipes: Rectangle {
                         height: 58px;

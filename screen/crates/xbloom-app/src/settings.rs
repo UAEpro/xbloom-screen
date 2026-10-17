@@ -66,11 +66,25 @@ pub struct Appearance {
     pub dim_brightness: u8,
     /// 24-hour clock.
     pub clock_24h: bool,
+    /// Interface size, % (70–200): bigger text and controls on dense panels. Capped on the
+    /// device so the layout never gets smaller than 480 × 272.
+    pub ui_scale: u16,
+    /// Picture and touch rotation, clockwise degrees (0, 90, 180, 270), to match how the
+    /// panel is mounted. Applied at start-up: changing it restarts the screen app.
+    pub rotation: u16,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { theme: Theme::Light, accent: "#c8743a".into(), brightness: 80, dim_brightness: 25, clock_24h: true }
+        Self {
+            theme: Theme::Light,
+            accent: "#c8743a".into(),
+            brightness: 80,
+            dim_brightness: 25,
+            clock_24h: true,
+            ui_scale: 100,
+            rotation: 0,
+        }
     }
 }
 
@@ -228,6 +242,11 @@ impl Settings {
         let a = &mut self.appearance;
         a.brightness = a.brightness.clamp(10, 100);
         a.dim_brightness = a.dim_brightness.min(100);
+        // Whole 10 % steps.
+        a.ui_scale = (a.ui_scale.clamp(70, 200) + 5) / 10 * 10;
+        if !matches!(a.rotation, 0 | 90 | 180 | 270) {
+            a.rotation = 0;
+        }
         if !is_hex_color(&a.accent) {
             a.accent = Appearance::default().accent;
         }
@@ -380,6 +399,22 @@ mod tests {
         assert!(!v.contains("hunter2"));
         assert!(!v.contains("salt"));
         assert!(v.contains("\"has_admin_pin\":true"));
+    }
+
+    #[test]
+    fn interface_size_and_rotation_are_kept_valid() {
+        let mut s = Settings::default();
+        s.appearance.ui_scale = 500;
+        s.appearance.rotation = 45;
+        s.sanitize();
+        assert_eq!((s.appearance.ui_scale, s.appearance.rotation), (200, 0));
+        s.appearance.ui_scale = 124;
+        s.appearance.rotation = 270;
+        s.sanitize();
+        assert_eq!((s.appearance.ui_scale, s.appearance.rotation), (120, 270));
+        s.appearance.ui_scale = 10;
+        s.sanitize();
+        assert_eq!(s.appearance.ui_scale, 70);
     }
 
     #[test]

@@ -39,6 +39,8 @@ slint-build = { version = "1.18", features = ["sdf-fonts"] }
 [dev-dependencies]
 jpeg-encoder = "0.6"
 tempfile = "3"
+# Element queries for the screen-size tests (same release as slint).
+i-slint-backend-testing = "=1.18.1"
 
 [[example]]
 name = "screenshots"

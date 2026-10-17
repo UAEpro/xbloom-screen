@@ -2,6 +2,7 @@
 // (screensaver / auto-lock) knows the screen is in use.
 
 import { Theme } from "theme.slint";
+import { Layout } from "layout.slint";
 import { AppState, Icons, LinkState } from "state.slint";
 
 export component Icon inherits Image {
@@ -34,6 +35,10 @@ export component Button inherits Rectangle {
 
     min-height: 52px;
     min-width: 52px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
     border-radius: Theme.r-btn;
     background: !enabled ? Theme.surface-2 : ta.pressed ? (base == transparent ? Theme.surface-2 : base.darker(0.12)) : base;
     border-width: kind == ButtonKind.outline ? 1.5px : 0px;
@@ -115,6 +120,9 @@ export component HoldButton inherits Rectangle {
     property <float> progress: 0;
 
     height: 64px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
     border-radius: Theme.r-btn;
     background: tone.transparentize(0.75);
     opacity: enabled ? 1 : 0.5;
@@ -228,18 +236,27 @@ export component Chip inherits Rectangle {
     }
 }
 
-// Machine link indicator (tap to open the machine sheet).
+// Machine link indicator (tap to open the machine sheet). Compact: a round Bluetooth badge.
 export component StatusPill inherits Rectangle {
+    in property <bool> compact: false;
     callback clicked();
     property <color> dot: AppState.link == LinkState.connected ? Theme.success
         : AppState.link == LinkState.connecting ? Theme.warning : Theme.text-3;
     height: 40px;
+    width: compact ? 40px : row.preferred-width;
     horizontal-stretch: 0;
     border-radius: 20px;
     background: ta.pressed ? Theme.surface-3 : Theme.surface;
     border-width: 1px;
     border-color: Theme.border;
-    HorizontalLayout {
+    if root.compact: Icon {
+        source: AppState.link == LinkState.connected ? Icons.bluetooth-on : Icons.bluetooth-off;
+        tint: root.dot;
+        width: 20px;
+        height: 20px;
+    }
+    row := HorizontalLayout {
+        visible: !root.compact;
         padding-left: 14px;
         padding-right: 16px;
         spacing: 8px;
@@ -310,6 +327,7 @@ export component Segmented inherits Rectangle {
     in-out property <int> selected;
     callback changed(int);
     height: 44px;
+    min-width: 150px;
     border-radius: 12px;
     background: Theme.surface-2;
     HorizontalLayout {
@@ -383,6 +401,7 @@ export component Slider inherits Rectangle {
     in property <int> maximum: 100;
     callback released(int);
     height: 36px;
+    min-width: 140px;
     property <float> frac: (value - minimum) / max(1, maximum - minimum);
     track := Rectangle {
         y: (parent.height - self.height) / 2;
@@ -427,9 +446,11 @@ component Key inherits Rectangle {
     in property <image> icon;
     in property <bool> is-icon: false;
     callback pressed-key();
-    width: 76px;
-    height: 64px;
-    border-radius: 18px;
+    accessible-role: button;
+    accessible-label: root.label;
+    width: Layout.key-width;
+    height: Layout.key-height;
+    border-radius: min(18px, self.height / 3);
     background: ta.pressed ? Theme.surface-3 : Theme.surface-2;
     animate background { duration: 90ms; }
     if !root.is-icon: Text {
@@ -457,7 +478,7 @@ component Key inherits Rectangle {
 export component PinPad inherits VerticalLayout {
     in property <string> error;
     in property <int> length;
-    spacing: 14px;
+    spacing: Layout.key-height < 52px ? 6px : 14px;
     alignment: center;
 
     HorizontalLayout {
@@ -482,60 +503,78 @@ export component PinPad inherits VerticalLayout {
         horizontal-alignment: center;
         height: 18px;
     }
-    GridLayout {
-        spacing: 10px;
-        Row {
-            Key { label: "1"; pressed-key => { AppState.pin-key("1"); } }
-            Key { label: "2"; pressed-key => { AppState.pin-key("2"); } }
-            Key { label: "3"; pressed-key => { AppState.pin-key("3"); } }
-        }
-        Row {
-            Key { label: "4"; pressed-key => { AppState.pin-key("4"); } }
-            Key { label: "5"; pressed-key => { AppState.pin-key("5"); } }
-            Key { label: "6"; pressed-key => { AppState.pin-key("6"); } }
-        }
-        Row {
-            Key { label: "7"; pressed-key => { AppState.pin-key("7"); } }
-            Key { label: "8"; pressed-key => { AppState.pin-key("8"); } }
-            Key { label: "9"; pressed-key => { AppState.pin-key("9"); } }
-        }
-        Row {
-            Key { is-icon: true; icon: Icons.backspace; pressed-key => { AppState.pin-key("del"); } }
-            Key { label: "0"; pressed-key => { AppState.pin-key("0"); } }
-            Key { is-icon: true; icon: Icons.check; pressed-key => { AppState.pin-key("ok"); } }
+    HorizontalLayout {
+        alignment: center;
+        GridLayout {
+            spacing: Layout.key-height < 52px ? 6px : 10px;
+            Row {
+                Key { label: "1"; pressed-key => { AppState.pin-key("1"); } }
+                Key { label: "2"; pressed-key => { AppState.pin-key("2"); } }
+                Key { label: "3"; pressed-key => { AppState.pin-key("3"); } }
+            }
+            Row {
+                Key { label: "4"; pressed-key => { AppState.pin-key("4"); } }
+                Key { label: "5"; pressed-key => { AppState.pin-key("5"); } }
+                Key { label: "6"; pressed-key => { AppState.pin-key("6"); } }
+            }
+            Row {
+                Key { label: "7"; pressed-key => { AppState.pin-key("7"); } }
+                Key { label: "8"; pressed-key => { AppState.pin-key("8"); } }
+                Key { label: "9"; pressed-key => { AppState.pin-key("9"); } }
+            }
+            Row {
+                Key { is-icon: true; label: "Delete"; icon: Icons.backspace; pressed-key => { AppState.pin-key("del"); } }
+                Key { label: "0"; pressed-key => { AppState.pin-key("0"); } }
+                Key { is-icon: true; label: "OK"; icon: Icons.check; pressed-key => { AppState.pin-key("ok"); } }
+            }
         }
     }
 }
 
-// A settings row: title + description on the left, a control on the right.
-export component SettingRow inherits Rectangle {
+component SettingText inherits VerticalLayout {
     in property <string> title;
     in property <string> description;
-    min-height: 68px;
+    alignment: center;
+    spacing: 3px;
+    Text {
+        text: root.title;
+        color: Theme.text;
+        font-size: Theme.fs-body;
+        font-weight: 600;
+        wrap: word-wrap;
+    }
+    if root.description != "": Text {
+        text: root.description;
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+}
+
+// A settings row: title + description on the left, a control on the right. When the control
+// would leave the text less than ~170 px of the settings card, it moves under the text and
+// gets the full width.
+export component SettingRow inherits VerticalLayout {
+    in property <string> title;
+    in property <string> description;
+    property <bool> stacked: Layout.settings-inner - ctl.preferred-width - 16px < 170px;
+    padding-top: 10px;
+    spacing: 0px;
+    if root.stacked: SettingText { padding-bottom: 8px; title: root.title; description: root.description; }
     HorizontalLayout {
-        padding-top: 10px;
+        // 68 px rows, counting the padding and the divider.
+        min-height: 57px;
         padding-bottom: 10px;
         spacing: 16px;
-        VerticalLayout {
-            alignment: center;
-            spacing: 3px;
-            Text {
-                text: root.title;
-                color: Theme.text;
-                font-size: Theme.fs-body;
-                font-weight: 600;
-            }
-            if root.description != "": Text {
-                text: root.description;
-                color: Theme.text-2;
-                font-size: Theme.fs-small;
-                wrap: word-wrap;
-            }
+        if !root.stacked: SettingText { horizontal-stretch: 1; title: root.title; description: root.description; }
+        ctl := HorizontalLayout {
+            horizontal-stretch: 0;
+            alignment: stretch;
+            cross-axis-alignment: center;
+            @children
         }
-        @children
     }
     Rectangle {
-        y: parent.height - 1px;
         height: 1px;
         background: Theme.border;
     }
@@ -548,8 +587,8 @@ export component StatTile inherits Rectangle {
     in property <image> icon;
     background: Theme.surface-2;
     border-radius: 16px;
-    min-height: 76px;
-    min-width: 80px;
+    min-height: Layout.compact ? 64px : 76px;
+    min-width: 72px;
     Icon {
         x: 12px;
         y: 13px;
@@ -568,7 +607,7 @@ export component StatTile inherits Rectangle {
     }
     val := Text {
         x: 12px;
-        y: 34px;
+        y: Layout.compact ? 30px : 34px;
         text: root.value;
         color: Theme.text;
         font-size: Theme.fs-title;

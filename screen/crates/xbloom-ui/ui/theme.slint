@@ -3,8 +3,9 @@
 // Rules that keep the UI identical on the Raspberry Pi and the ESP32-S3 software renderer:
 //  * no drop shadows (unsupported) — elevation is a 1px border + a tonal surface step;
 //  * no rounded clipping of images — imagery is full-bleed or square;
-//  * a fixed set of font sizes — the MCU build pre-renders glyphs per size.
+//  * type comes from the scale below, which steps down on small screens (Layout).
 
+import { Layout } from "layout.slint";
 import "fonts/Inter-Light.otf";
 import "fonts/Inter-Regular.otf";
 import "fonts/Inter-Medium.otf";
@@ -43,21 +44,19 @@ export global Theme {
     out property <color> water-soft: water.transparentize(0.86);
 
     // Type scale — keep to these sizes.
-    out property <length> fs-clock: 120px;
-    out property <length> fs-display: 56px;
-    out property <length> fs-hero: 36px;
-    out property <length> fs-title: 26px;
-    out property <length> fs-h2: 20px;
+    out property <length> fs-clock: min(Layout.width, Layout.height) < 400px ? 88px : Layout.large ? 150px : 120px;
+    out property <length> fs-display: Layout.compact ? 44px : Layout.large ? 64px : 56px;
+    out property <length> fs-hero: Layout.compact ? 28px : 36px;
+    out property <length> fs-title: Layout.compact ? 22px : 26px;
+    out property <length> fs-h2: Layout.compact ? 18px : 20px;
     out property <length> fs-body: 16px;
     out property <length> fs-small: 14px;
     out property <length> fs-caption: 12px;
 
     // Shape and rhythm.
-    out property <length> r-card: 22px;
+    out property <length> r-card: Layout.compact ? 18px : 22px;
     out property <length> r-btn: 16px;
     out property <length> r-field: 12px;
-    out property <length> gap: 12px;
-    out property <length> pad: 20px;
 }
 
 // Accent presets offered in settings.

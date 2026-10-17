@@ -493,6 +493,7 @@ fn info(app: &App, req: &dyn HttpRequest) -> Response {
         "screen": {"width": app.platform.screen.0, "height": app.platform.screen.1},
         "video": app.platform.video,
         "max_upload": app.platform.max_upload,
+        "can_rotate": app.platform.can_rotate,
         "storage": storage,
         "simulator": s.machine.simulator,
         "theme": s.appearance.theme,

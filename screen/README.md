@@ -30,7 +30,10 @@ a dark version, rendered from the real app driving the built-in simulated machin
   PIN, and the screen locks again after it has been idle.
 - **Screensaver**: a clock, a video or a photo slideshow, with dimming, and the screen
   switches off after a longer idle period.
-- **Appearance**: light, dark or automatic (dark at night), six accent colours, brightness.
+- **Appearance**: light, dark or automatic (dark at night), six accent colours, brightness,
+  interface size.
+- **Any screen**: the layout adapts to panels from 480 × 272 up to large HDMI screens, in
+  landscape or portrait (see [Screen sizes](#screen-sizes-and-orientation)).
 - **Setup wizard**: set an admin PIN, pair the machine, then scan the QR code to open the
   admin panel.
 - **Demo mode**: a built-in simulated machine, so you can try everything without coffee.
@@ -67,7 +70,7 @@ arms the machine; it never starts a brew.**
 | --- | --- |
 | Board | Raspberry Pi Zero 2 W, 3B+, 4 or 5 with built-in Bluetooth |
 | OS | Raspberry Pi OS Lite **64-bit** (Bookworm or newer); no desktop needed |
-| Display | Any DSI or HDMI touchscreen. The UI is designed at 800 × 480 (the official 7" display) and stretches to larger panels |
+| Display | Any DSI or HDMI touchscreen, 480 × 272 or larger, landscape or portrait. See [Screen sizes](#screen-sizes-and-orientation) |
 
 The app draws straight to the display through DRM/KMS and reads touch through libinput, so
 it needs no X11, Wayland or browser.
@@ -85,9 +88,37 @@ it needs no X11, Wayland or browser.
 > ESP32-S3 boards need one board entry in
 > [`firmware/esp32s3/src/board.rs`](firmware/esp32s3/src/board.rs).
 
-On the ESP32, recipes, history and media live on a ~10 MB flash partition. Screensaver
+On the ESP32, recipes, history and media live on a ~9 MB flash partition. Screensaver
 videos are converted at half resolution (400 × 240, 10 fps, up to 30 s) and scaled up on
 the screen.
+
+## Screen sizes and orientation
+
+The UI is designed at 800 × 480 (the official 7" Pi display and the common 4.3"–7" ESP32-S3
+boards) and lays itself out again for other panels instead of stretching:
+
+![The brewing screen on six panel sizes](../docs/img/screen/sizes.png)
+
+| Screen | Layout |
+| --- | --- |
+| **Short** (480 × 272, 480 × 320) | Slim header, icon-only navigation rail, smaller type. Panels stay side by side, trimmed to their controls: the brew panel keeps Hold to brew and Load only, and the PIN dialog puts the keypad beside its heading |
+| **Regular** (800 × 480, 1024 × 600) | The reference layout. Recipes scroll in a row at 800 × 480 and form a two-row grid from 1024 × 600 |
+| **Large** (1280 × 800 and up) | More grid columns, a bigger progress ring and clock |
+| **Portrait** (480 × 800, 720 × 1280) and **square** (480 × 480) | Navigation moves to a bottom tab bar, and panels stack: the brew controls are pinned under the recipe, the ring sits over the chart |
+
+Whatever the size, the brew controls and the **Stop** button stay on screen, and dialogs
+always fit inside it.
+
+**Interface size** (Settings → Display, or the admin panel) makes text and controls bigger
+or smaller, from 70 % to 200 %. Use it for dense panels, such as a 5" 720 × 1280 or a 10"
+1920 × 1080. It is capped so the layout never gets smaller than 480 × 272.
+
+**Rotation** (0°, 90°, 180° or 270°, clockwise) turns both the picture and the touch input,
+for a panel mounted on its side or upside down. The app restarts to apply it. It is offered
+on the kiosk Pi and on the ESP32; a desktop rotates its own windows. On the Pi,
+`SLINT_KMS_ROTATION` in the service file overrides the setting, and a touch calibration set
+in udev (`LIBINPUT_CALIBRATION_MATRIX`) is kept, with the rotation applied on top of it. If a
+rotation leaves the screen hard to use, change it back from the admin panel.
 
 ## Install
 
@@ -223,6 +254,9 @@ cargo test --workspace                       # all tests (no hardware needed)
 cargo run -p xbloom-screen -- --demo         # run in a desktop window, simulated machine
                                              # admin panel on http://localhost:8080
 cargo run -p xbloom-ui --example screenshots --features screenshot -- ../docs/img/screen
+# the same at another panel size and interface scale, light theme only:
+cargo run -p xbloom-ui --example screenshots --features screenshot -- /tmp/shots 480x320 quick
+cargo run -p xbloom-ui --example screenshots --features screenshot -- /tmp/shots 1920x1080@1.5 quick
 python3 tools/gen_golden.py                  # after a protocol change in xbloom_ble
 ```
 

@@ -79,9 +79,13 @@ fn main() {
         .expect("backlight");
     let backlight = Arc::new(Mutex::new(backlight));
     let panel = display::Display::new(&BOARD).expect("display");
-    let size = panel.size();
-    let touch = touch::Gt911::new(peripherals.i2c0, &BOARD.touch, size).expect("touch");
-    platform::EspPlatform::install(panel, touch).expect("slint platform");
+    let touch = touch::Gt911::new(peripherals.i2c0, &BOARD.touch, panel.size()).expect("touch");
+    // The screen as the UI sees it: a quarter turn swaps the sides.
+    let size = match panel.size() {
+        (w, h) if settings.appearance.rotation % 180 == 90 => (h, w),
+        wh => wh,
+    };
+    platform::EspPlatform::install(panel, touch, settings.appearance.rotation).expect("slint platform");
     let ui = xbloom_ui::AppWindow::new().expect("ui");
 
     // Wi-Fi (or the setup hotspot), then the app.
@@ -96,13 +100,20 @@ fn main() {
         history_points: 160,
         max_upload: 4_000_000,
         version: env!("CARGO_PKG_VERSION").into(),
+        can_rotate: true,
     };
     let hooks = hooks::EspHooks { net: Arc::clone(&net), backlight };
     let app = App::start(data, info, Box::new(ble::NimbleTransport::new()), Box::new(hooks), SimConfig::default());
     let weak = Arc::downgrade(&app);
+    let rotation = settings.appearance.rotation;
     app.subscribe(move |ev| {
         if let (Event::Changed(Data::Settings), Some(app)) = (ev, weak.upgrade()) {
-            apply_timezone(&app.settings().timezone);
+            let s = app.settings();
+            apply_timezone(&s.timezone);
+            // A new rotation is applied at start-up.
+            if s.appearance.rotation != rotation {
+                app.hooks().restart();
+            }
         }
     });
     let _server = match http::start(Arc::clone(&app), Arc::clone(&net)) {

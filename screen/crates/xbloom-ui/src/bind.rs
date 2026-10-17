@@ -129,6 +129,8 @@ impl Ui {
             });
             g.set_brightness(i32::from(s.appearance.brightness));
             g.set_clock_24h(s.appearance.clock_24h);
+            g.set_ui_scale(i32::from(s.appearance.ui_scale));
+            g.set_rotation(i32::from(s.appearance.rotation / 90));
             g.set_allow_remote_start(s.security.allow_remote_start);
             g.set_hold_ms(s.security.hold_to_brew_ms as i32);
             g.set_lock_mode(match s.security.lock_mode {
@@ -154,7 +156,15 @@ impl Ui {
             let needs_setup = !s.setup_complete;
             g.set_needs_setup(needs_setup);
         });
+        self.apply_scale(s.appearance.ui_scale);
         self.tick_clock();
+    }
+
+    fn apply_scale(&self, percent: u16) {
+        self.with(|ui| {
+            let max = apply_interface_size(ui, percent);
+            ui.global::<AppState>().set_ui_scale_max(max);
+        });
     }
 
     fn load_recipes(&mut self) {
@@ -328,6 +338,7 @@ impl Ui {
         };
         self.with(|ui| {
             let g = ui.global::<AppState>();
+            g.set_can_rotate(p.can_rotate);
             g.set_version(p.version.as_str().into());
             g.set_platform(format!("{platform} · {}×{}", p.screen.0, p.screen.1).into());
             g.set_storage(storage.into());
@@ -907,6 +918,39 @@ macro_rules! on {
     }};
 }
 
+/// Smallest logical screen the layouts are designed for: landscape and portrait.
+const MIN_LANDSCAPE: (f32, f32) = (480.0, 272.0);
+const MIN_PORTRAIT: (f32, f32) = (320.0, 480.0);
+
+/// The largest scale factor that keeps a `width` × `height` (physical px) screen at least the
+/// smallest layout. Below 1 on panels smaller than that, which then render scaled down.
+pub fn max_scale(width: u32, height: u32) -> f32 {
+    let (w, h) = if height > width { MIN_PORTRAIT } else { MIN_LANDSCAPE };
+    (width as f32 / w).min(height as f32 / h)
+}
+
+/// Apply the interface-size setting: the window's scale factor becomes `percent` of the
+/// platform's own (`SLINT_SCALE_FACTOR`, else 1), capped so the layout stays at least its
+/// minimum size. Returns the largest setting this panel allows, in whole 10 % steps.
+pub fn apply_interface_size(ui: &AppWindow, percent: u16) -> i32 {
+    let window = ui.window();
+    let size = window.size();
+    if size.width == 0 || size.height == 0 {
+        return 200;
+    }
+    let base: f32 = std::env::var("SLINT_SCALE_FACTOR").ok().and_then(|v| v.parse().ok()).unwrap_or(1.0);
+    let fit = max_scale(size.width, size.height);
+    let scale = (base * f32::from(percent) / 100.0).min(fit);
+    if (window.scale_factor() - scale).abs() > 0.001 {
+        use slint::platform::WindowEvent;
+        window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: scale });
+        // Same pixels, new logical size (Slint would otherwise keep the logical size and
+        // outgrow the frame buffer).
+        window.dispatch_event(WindowEvent::Resized { size: size.to_logical(scale) });
+    }
+    ((fit / base * 10.0).floor() as i32 * 10).clamp(70, 200)
+}
+
 /// Bind `ui` to `app`. Call once on the UI thread, before running the event loop.
 pub fn bind(ui: &AppWindow, app: Arc<App>) {
     clock::reload_zone();
@@ -930,6 +974,14 @@ pub fn bind(ui: &AppWindow, app: Arc<App>) {
     }));
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&st)));
     st.borrow_mut().load_all();
+    // Again once the window is up: showing it can reset the scale factor.
+    {
+        let st = Rc::clone(&st);
+        Timer::single_shot(Duration::ZERO, move || {
+            let me = st.borrow();
+            me.apply_scale(me.app.settings().appearance.ui_scale);
+        });
+    }
     app.hooks().set_brightness(app.settings().appearance.brightness);
     // A configured screen lock starts locked after a reboot.
     {
@@ -975,6 +1027,17 @@ pub fn bind(ui: &AppWindow, app: Arc<App>) {
     on!(ui, st, on_set_clock_24h, |me, v: bool| {
         me.app.update_settings(|s| s.appearance.clock_24h = v);
         me.load_history();
+    });
+    on!(ui, st, on_set_ui_scale, |me, v: i32| {
+        me.app.update_settings(|s| s.appearance.ui_scale = v.clamp(70, 200) as u16);
+    });
+    on!(ui, st, on_set_rotation, |me, i: i32| {
+        let degrees = (i.clamp(0, 3) * 90) as u16;
+        if me.app.settings().appearance.rotation != degrees {
+            // The platform restarts the app to apply it.
+            me.toast("Rotating the screen…", "info");
+            me.app.update_settings(|s| s.appearance.rotation = degrees);
+        }
     });
     on!(ui, st, on_set_saver_mode, |me, i: i32| {
         let mode = [ScreensaverMode::Off, ScreensaverMode::Clock, ScreensaverMode::Video, ScreensaverMode::Slideshow]
@@ -1107,5 +1170,21 @@ pub fn force_wake() {
     let st = UI.with(|u| u.borrow().clone());
     if let Some(st) = st {
         st.borrow_mut().wake();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::max_scale;
+
+    #[test]
+    fn interface_size_never_shrinks_the_layout_below_its_minimum() {
+        // 800 × 480 can go to 166 % before its width drops under 480.
+        assert!((max_scale(800, 480) - 800.0 / 480.0).abs() < 1e-6);
+        // A 1920 × 1080 panel has room to spare; 720 × 1280 portrait is limited by its width.
+        assert!(max_scale(1920, 1080) > 3.9);
+        assert!((max_scale(720, 1280) - 720.0 / 320.0).abs() < 1e-6);
+        // A panel smaller than the minimum renders scaled down to fit.
+        assert!(max_scale(320, 240) < 1.0);
     }
 }

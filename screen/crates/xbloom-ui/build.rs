@@ -16,7 +16,12 @@ fn main() {
             .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer)
             .with_sdf_fonts(true)
     } else {
-        slint_build::CompilerConfiguration::new().embed_resources(slint_build::EmbedResourcesKind::EmbedFiles)
+        // Debug builds keep element ids and names, so the tests can find elements on screen
+        // (tests/fit.rs).
+        let debug = std::env::var("PROFILE").as_deref() == Ok("debug");
+        slint_build::CompilerConfiguration::new()
+            .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles)
+            .with_debug_info(debug)
     };
     slint_build::compile_with_config("ui/app.slint", config).expect("compile the Slint UI");
 }

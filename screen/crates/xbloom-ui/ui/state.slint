@@ -127,6 +127,10 @@ export global AppState {
     in property <int> theme-mode: 0;           // 0 light · 1 dark · 2 auto
     in property <int> brightness: 80;
     in property <bool> clock-24h: true;
+    in property <int> ui-scale: 100;           // interface size, %
+    in property <int> ui-scale-max: 200;       // largest that fits this panel
+    in property <int> rotation: 0;             // 0 · 90 · 180 · 270 degrees, as 0–3
+    in property <bool> can-rotate: false;
     in property <bool> allow-remote-start: true;
     in property <int> hold-ms: 1200;
     in property <int> saver-idle-min: 2;
@@ -173,6 +177,8 @@ export global AppState {
     callback set-accent(color);
     callback set-brightness(int);
     callback set-clock-24h(bool);
+    callback set-ui-scale(int);
+    callback set-rotation(int);              // 0–3 (× 90°); the app restarts to apply it
     callback set-saver-mode(int);
     callback set-saver-idle(int);
     callback set-saver-video(string);
