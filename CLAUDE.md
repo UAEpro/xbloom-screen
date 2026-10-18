@@ -143,7 +143,9 @@ project in `screen/firmware/esp32s3`). Layout and design notes are in
   a change with the screenshot example at a few sizes (`cargo run -p xbloom-ui --example
   screenshots --features screenshot -- /tmp/shots 480x320 quick`).
 - **Firmware:** needs the Xtensa toolchain **1.98.1.0** (`espup`); see
-  `screen/firmware/esp32s3/README.md`. It has not been tested on hardware yet — say so.
+  `screen/firmware/esp32s3/README.md`. One cargo feature per board (`board-…` in its
+  `Cargo.toml`, pins in `src/board.rs`), and CI builds an image for each. It has not been
+  tested on hardware yet — say so.
 - **Releases** of the screen are separate from the Python package: a `screen-vX.Y.Z` tag
   (matching `version` in `screen/Cargo.toml` and the firmware's `Cargo.toml`) publishes
   the Pi binary and the ESP32 image; see [docs/RELEASING.md](docs/RELEASING.md).

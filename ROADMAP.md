@@ -61,8 +61,9 @@ with a web admin panel.
       built in CI and published as `screen-latest` / `screen-vX.Y.Z` releases.
 - [x] Layout for any panel from 480 × 272 up, landscape or portrait; interface-size and
       rotation settings.
-- [ ] **Run the ESP32-S3 firmware on real hardware** (Sunton ESP32-8048S043C) and correct
-      the pin map / panel timings as needed — it is built but untested.
+- [ ] **Run the ESP32-S3 firmware on real hardware** (Sunton ESP32-8048S043C, Waveshare
+      ESP32-S3-Touch-LCD-7) and correct the pin maps / panel timings as needed — it is built
+      but untested.
 - [ ] Try **rotation** on a real side-mounted Pi panel (touch calibration).
 - [ ] More ESP32-S3 boards (one `Board` entry each in `firmware/esp32s3/src/board.rs`).
 - [ ] A headless build for the classic ESP32 (ESP-WROOM-32): Bluetooth + the admin panel,

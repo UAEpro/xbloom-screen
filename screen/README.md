@@ -80,15 +80,23 @@ it needs no X11, Wayland or browser.
 
 ### ESP32-S3 (experimental)
 
-| | |
-| --- | --- |
-| Board | Sunton **ESP32-8048S043C**: 4.3" 800 × 480 IPS, GT911 capacitive touch, ESP32-S3 with 16 MB flash and 8 MB PSRAM (sold as "ESP32-8048S043C" / "N16R8") |
-| Power | USB-C, 5 V |
+Two boards are supported, each with its own firmware image. Both have an ESP32-S3 with
+16 MB flash and 8 MB PSRAM (N16R8) and run from USB-C, 5 V.
+
+| Board | Screen | Image |
+| --- | --- | --- |
+| Sunton **ESP32-8048S043C** | 4.3" 800 × 480 IPS, GT911 capacitive touch, dimmable backlight | `xbloom-screen-esp32s3-sunton-8048s043c.bin` |
+| Waveshare **ESP32-S3-Touch-LCD-7** | 7" 800 × 480, GT911 capacitive touch, backlight on/off only | `xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin` |
+
+On the Waveshare board the backlight can only be switched on and off, so **Brightness** and
+the screensaver's dimming step have no effect; the screen still turns off when it sleeps.
+The Waveshare ESP32-S3-Touch-LCD-**7B** (1024 × 600) is a different board and needs its own
+entry.
 
 > ⚠️ The ESP32 firmware compiles in CI from the same code as the Pi app, but **it has not yet
-> been tested on real hardware**. The board's pin map and panel timings come from the
-> vendor's examples. If you try it, please open an issue with what you see. Other RGB-panel
-> ESP32-S3 boards need one board entry in
+> been tested on real hardware**. The pin maps and panel timings come from the vendors'
+> board configurations. If you try it, please open an issue with what you see. Other
+> RGB-panel ESP32-S3 boards need one board entry in
 > [`firmware/esp32s3/src/board.rs`](firmware/esp32s3/src/board.rs).
 
 On the ESP32, recipes, history and media live on a ~9 MB flash partition. Screensaver
@@ -162,17 +170,19 @@ Logs: `journalctl -u xbloom-screen -f`.
 
 ### ESP32-S3
 
-1. Download `xbloom-screen-esp32s3.bin` from a
+1. Download the image for your board (see the [table above](#esp32-s3-experimental)) from a
    [release](https://github.com/uaepro/xbloom-screen/releases) (or the
    [latest build of `main`](https://github.com/uaepro/xbloom-screen/releases/tag/screen-latest)).
+   The images aren't interchangeable: each one drives its own board's pins.
 2. Flash it **at address 0x0**. It's a merged image with the bootloader, partition table
    and app. You can use [Espressif's web flasher](https://espressif.github.io/esptool-js/)
    in Chrome/Edge, or from a terminal:
    ```bash
-   espflash write-bin 0x0 xbloom-screen-esp32s3.bin
+   espflash write-bin 0x0 xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin
    ```
    The image ends before the data partition, so flashing an update keeps your recipes,
-   history and settings. Don't tick "erase flash" unless you want a factory reset.
+   history and settings. Don't tick "erase flash" unless you want a factory reset. If the
+   computer doesn't see the board, hold **BOOT** while you plug it in.
 3. On first boot the screen asks for an admin PIN and offers to pair the machine. Then go to
    **Settings → Admin panel**: until it has Wi-Fi credentials, the screen hosts its own
    network called `xBloom-Screen-XXXX`. The password is shown there, together with a QR code
@@ -291,7 +301,8 @@ espup install --targets esp32s3 --toolchain-version 1.98.1.0
 cargo install ldproxy espflash
 . ~/export-esp.sh
 cd screen/firmware/esp32s3
-cargo build --release
+cargo build --release    # Sunton ESP32-8048S043C, the default board
+# or: cargo build --release --no-default-features --features board-waveshare-s3-touch-lcd-7
 espflash flash --monitor target/xtensa-esp32s3-espidf/release/xbloom-screen-esp32s3
 ```
 

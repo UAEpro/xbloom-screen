@@ -6,23 +6,19 @@
 //! must be cleared after each read.
 
 use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, PinDriver};
-use esp_idf_svc::hal::i2c::{I2c, I2cConfig, I2cDriver};
-use esp_idf_svc::hal::units::Hertz;
-use esp_idf_svc::sys::EspError;
+use esp_idf_svc::sys::{self, EspError};
 
-use crate::board::Touch as TouchPins;
+use crate::board::{Line, Touch as TouchPins};
+use crate::io::{Bus, Lines, TIMEOUT};
 
 const REG_PRODUCT_ID: u16 = 0x8140;
 const REG_X_MAX: u16 = 0x8048;
 const REG_STATUS: u16 = 0x814E;
 const REG_POINT1: u16 = 0x8150;
-/// I²C timeout, ticks (ms).
-const TIMEOUT: u32 = 20;
 
 /// The touch controller.
 pub struct Gt911 {
-    i2c: I2cDriver<'static>,
+    i2c: Bus,
     addr: u8,
     /// Controller resolution, to scale into screen pixels.
     native: (u32, u32),
@@ -34,22 +30,20 @@ pub struct Gt911 {
 }
 
 impl Gt911 {
-    /// Reset and probe the controller on the board's I²C pins.
-    pub fn new(i2c: impl I2c + 'static, pins: &TouchPins, screen: (u32, u32)) -> Result<Self, EspError> {
+    /// Reset the controller and probe it on the board's I²C bus.
+    pub fn new(i2c: Bus, lines: &Lines, pins: &TouchPins, screen: (u32, u32)) -> Result<Self, EspError> {
         if let Some(rst) = pins.rst {
-            // SAFETY: the board reserves this GPIO for the touch reset line.
-            let mut rst = PinDriver::output(unsafe { AnyOutputPin::steal(rst) })?;
-            rst.set_low()?;
-            FreeRtos::delay_ms(10);
-            rst.set_high()?;
-            FreeRtos::delay_ms(60);
-            // Keep driving it high after the driver is dropped.
-            core::mem::forget(rst);
+            // INT low through the reset and for a while after selects address 0x5D (GT911
+            // datasheet); boards that don't wire INT get whichever address it powers up with.
+            if let Some(int) = pins.int {
+                lines.set(Line::Gpio(int), false);
+                FreeRtos::delay_ms(10);
+            }
+            lines.pulse_low(rst, 100, 200);
+            if let Some(int) = pins.int {
+                lines.release(int);
+            }
         }
-        // SAFETY: the board reserves these GPIOs for the touch bus.
-        let (sda, scl) = unsafe { (AnyIOPin::steal(pins.sda), AnyIOPin::steal(pins.scl)) };
-        let cfg = I2cConfig::new().baudrate(Hertz(400_000)).sda_enable_pullup(true).scl_enable_pullup(true);
-        let i2c = I2cDriver::new(i2c, sda, scl, &cfg)?;
         let mut me = Self {
             i2c,
             addr: 0x5D,
@@ -83,12 +77,14 @@ impl Gt911 {
     }
 
     fn read_reg(&mut self, reg: u16, buf: &mut [u8]) -> Result<(), EspError> {
-        self.i2c.write_read(self.addr, &reg.to_be_bytes(), buf, TIMEOUT)
+        let mut i2c = self.i2c.lock().map_err(|_| EspError::from_infallible::<{ sys::ESP_FAIL }>())?;
+        i2c.write_read(self.addr, &reg.to_be_bytes(), buf, TIMEOUT)
     }
 
     fn write_reg(&mut self, reg: u16, value: u8) -> Result<(), EspError> {
         let [hi, lo] = reg.to_be_bytes();
-        self.i2c.write(self.addr, &[hi, lo, value], TIMEOUT)
+        let mut i2c = self.i2c.lock().map_err(|_| EspError::from_infallible::<{ sys::ESP_FAIL }>())?;
+        i2c.write(self.addr, &[hi, lo, value], TIMEOUT)
     }
 
     /// The finger position in screen pixels, or `None` when nothing touches the glass.

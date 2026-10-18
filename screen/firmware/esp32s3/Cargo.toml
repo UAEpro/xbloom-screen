@@ -12,9 +12,14 @@ name = "xbloom-screen-esp32s3"
 harness = false
 
 [features]
+# One board per build (see src/board.rs). For a board other than the default, build with
+# `--no-default-features --features board-…`.
 default = ["board-sunton-8048s043"]
 # Sunton ESP32-8048S043C: 4.3" 800×480 RGB panel, GT911 touch, 16 MB flash, 8 MB PSRAM.
 board-sunton-8048s043 = []
+# Waveshare ESP32-S3-Touch-LCD-7: 7" 800×480 RGB panel, GT911 touch, CH422G I/O expander,
+# 16 MB flash, 8 MB PSRAM.
+board-waveshare-s3-touch-lcd-7 = []
 
 [dependencies]
 xbloom-core = { path = "../../crates/xbloom-core", features = ["std"] }
