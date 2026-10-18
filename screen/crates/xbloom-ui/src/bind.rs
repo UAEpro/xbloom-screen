@@ -524,30 +524,27 @@ impl Ui {
         if brewing || g.get_needs_setup() {
             return;
         }
-        let idle_s = Duration::from_secs(u64::from(s.screensaver.idle_s));
-        let lock_after = Duration::from_secs(u64::from(s.security.auto_lock_s));
-        if s.security.lock_mode == LockMode::Screen && s.lock_configured() && !g.get_locked() && idle >= lock_after {
-            drop(g);
-            self.lock();
-            return;
-        }
-        if !g.get_saver_active() && idle >= idle_s {
-            drop(g);
-            if s.screensaver.mode == ScreensaverMode::Off {
-                if !self.dimmed {
-                    self.dimmed = true;
-                    self.app.hooks().set_brightness(s.appearance.dim_brightness);
-                }
-            } else {
+        let shown =
+            Shown { locked: g.get_locked(), saver: g.get_saver_active(), asleep: g.get_asleep(), dimmed: self.dimmed };
+        match idle_step(&s, idle, shown) {
+            IdleStep::Stay => {}
+            IdleStep::Lock => {
+                drop(g);
+                self.lock();
+            }
+            IdleStep::StartSaver => {
+                drop(g);
                 self.start_saver(&s);
             }
-            return;
-        }
-        let sleep_after = s.screensaver.sleep_after_s;
-        if sleep_after > 0 && !g.get_asleep() && idle >= idle_s + Duration::from_secs(u64::from(sleep_after)) {
-            g.set_asleep(true);
-            self.player = None;
-            self.app.hooks().set_brightness(0);
+            IdleStep::Dim => {
+                self.dimmed = true;
+                self.app.hooks().set_brightness(s.appearance.dim_brightness);
+            }
+            IdleStep::Sleep => {
+                g.set_asleep(true);
+                self.player = None;
+                self.app.hooks().set_brightness(0);
+            }
         }
     }
 
@@ -918,6 +915,49 @@ macro_rules! on {
     }};
 }
 
+/// What the screen shows right now, for the idle timer.
+#[derive(Debug, Clone, Copy, Default)]
+struct Shown {
+    locked: bool,
+    saver: bool,
+    asleep: bool,
+    dimmed: bool,
+}
+
+/// The idle timer's next step (one per tick).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdleStep {
+    Stay,
+    Lock,
+    StartSaver,
+    /// No screensaver: just dim the backlight.
+    Dim,
+    Sleep,
+}
+
+/// After `idle` without a touch: lock (screen lock), then the screensaver — or, with the
+/// screensaver off, a dimmed screen — and after `sleep_after_s` more, the backlight off.
+fn idle_step(s: &Settings, idle: Duration, shown: Shown) -> IdleStep {
+    let idle_s = Duration::from_secs(u64::from(s.screensaver.idle_s));
+    let lock_after = Duration::from_secs(u64::from(s.security.auto_lock_s));
+    if s.security.lock_mode == LockMode::Screen && s.lock_configured() && !shown.locked && idle >= lock_after {
+        return IdleStep::Lock;
+    }
+    if !shown.saver && idle >= idle_s {
+        if s.screensaver.mode != ScreensaverMode::Off {
+            return IdleStep::StartSaver;
+        }
+        if !shown.dimmed {
+            return IdleStep::Dim;
+        }
+    }
+    let sleep_after = s.screensaver.sleep_after_s;
+    if sleep_after > 0 && !shown.asleep && idle >= idle_s + Duration::from_secs(u64::from(sleep_after)) {
+        return IdleStep::Sleep;
+    }
+    IdleStep::Stay
+}
+
 /// Smallest logical screen the layouts are designed for: landscape and portrait.
 const MIN_LANDSCAPE: (f32, f32) = (480.0, 272.0);
 const MIN_PORTRAIT: (f32, f32) = (320.0, 480.0);
@@ -991,7 +1031,13 @@ pub fn bind(ui: &AppWindow, app: Arc<App>) {
         }
     }
 
-    on!(ui, st, on_activity, |me| me.last_activity = Instant::now());
+    on!(ui, st, on_activity, |me| {
+        me.last_activity = Instant::now();
+        // With the screensaver off the idle screen is only dimmed: a touch brings it back.
+        if me.dimmed {
+            me.wake();
+        }
+    });
     on!(ui, st, on_wake, |me| me.wake());
     on!(ui, st, on_navigate, |me, p: Page| me.navigate(p));
     on!(ui, st, on_open_recipe, |me, id: SharedString| me.open_recipe(&id));
@@ -1175,7 +1221,32 @@ pub fn force_wake() {
 
 #[cfg(test)]
 mod tests {
-    use super::max_scale;
+    use super::{idle_step, max_scale, IdleStep, Shown};
+    use std::time::Duration;
+    use xbloom_app::settings::{ScreensaverMode, Settings};
+
+    #[test]
+    fn idle_screen_dims_then_sleeps_even_without_a_screensaver() {
+        let mut s = Settings::default();
+        s.screensaver.idle_s = 60;
+        s.screensaver.sleep_after_s = 600;
+        let secs = Duration::from_secs;
+        for mode in [ScreensaverMode::Off, ScreensaverMode::Clock] {
+            s.screensaver.mode = mode;
+            let first = if mode == ScreensaverMode::Off { IdleStep::Dim } else { IdleStep::StartSaver };
+            assert_eq!(idle_step(&s, secs(30), Shown::default()), IdleStep::Stay);
+            assert_eq!(idle_step(&s, secs(61), Shown::default()), first);
+            // Dimmed, or showing the screensaver: then the backlight goes off.
+            let shown = if mode == ScreensaverMode::Off {
+                Shown { dimmed: true, ..Shown::default() }
+            } else {
+                Shown { saver: true, ..Shown::default() }
+            };
+            assert_eq!(idle_step(&s, secs(300), shown), IdleStep::Stay);
+            assert_eq!(idle_step(&s, secs(661), shown), IdleStep::Sleep, "{mode:?}");
+            assert_eq!(idle_step(&s, secs(700), Shown { asleep: true, ..shown }), IdleStep::Stay);
+        }
+    }
 
     #[test]
     fn interface_size_never_shrinks_the_layout_below_its_minimum() {

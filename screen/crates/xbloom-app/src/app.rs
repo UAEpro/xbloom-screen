@@ -652,6 +652,27 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn demo_mode_switched_mid_brew_applies_when_the_brew_ends() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = test_app(dir.path(), true);
+        let finished = Arc::new(AtomicBool::new(false));
+        let f2 = Arc::clone(&finished);
+        app.subscribe(move |ev| {
+            if let Event::BrewFinished { .. } = ev {
+                f2.store(true, Ordering::SeqCst);
+            }
+        });
+        wait_until("connected", || app.machine_status().link == crate::controller::Link::Connected);
+        let id = app.recipes.lock().unwrap().list()[0].id.clone();
+        app.brew(&id, true, None).unwrap();
+        // Arrives while the controller is busy brewing.
+        app.update_settings(|s| s.machine.simulator = false);
+        wait_until("brew finished", || finished.load(Ordering::SeqCst));
+        wait_until("hardware transport back", || !app.machine_status().simulator);
+        app.shutdown();
+    }
+
+    #[test]
     fn presets_push_through_the_simulator() {
         let dir = tempfile::tempdir().unwrap();
         let app = test_app(dir.path(), true);

@@ -105,7 +105,9 @@ impl XbvReader {
         file.read_exact(&mut raw).map_err(|_| bad("truncated frame index"))?;
         let data_start = HEADER_LEN + raw.len() as u64;
         let index: Vec<(u32, u32)> = raw
-            .chunks_exact(8)
+            .as_chunks::<8>()
+            .0
+            .iter()
             .map(|c| (u32::from_le_bytes([c[0], c[1], c[2], c[3]]), u32::from_le_bytes([c[4], c[5], c[6], c[7]])))
             .collect();
         for &(off, n) in &index {

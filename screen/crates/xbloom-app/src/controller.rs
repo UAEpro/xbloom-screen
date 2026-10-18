@@ -643,6 +643,8 @@ impl Controller {
                     finished = Some(BrewOutcome::Cancelled);
                     continue;
                 }
+                // Demo mode switched mid-brew: applied from the saved setting when the brew ends.
+                Ok(Command::SetSimulator(_)) => {}
                 Ok(other) => {
                     log::warn!("controller: busy brewing — ignoring {other:?}");
                     self.app.toast("Busy brewing — try again when it's done", ToastKind::Warning);
@@ -686,6 +688,11 @@ impl Controller {
             let _ = self.machine().cancel();
         }
         self.finish_brew(recipe, recipe_id, start, &mon, outcome);
+        // Catch the transport up with demo mode, in case it was switched during the brew.
+        let simulator = self.app.settings().machine.simulator;
+        if simulator != self.using_sim() {
+            self.handle(Command::SetSimulator(simulator));
+        }
     }
 
     fn push_progress(&self, mon: &BrewMonitor, now: f32) {
