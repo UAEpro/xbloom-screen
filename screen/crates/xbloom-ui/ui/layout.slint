@@ -1,0 +1,59 @@
+// Screen-size classes. The UI is designed at 800 × 480 and adapts to panels from 480 × 272
+// up to large HDMI screens, in landscape and portrait. AppWindow feeds in its logical size
+// (after the interface-size setting is applied); components read the classes and tokens here
+// instead of testing sizes themselves.
+//
+//   480 × 272, 480 × 320   short: slim header, icon-only rail, tighter type
+//   480 × 480              narrow: side-by-side panels shrink or stack
+//   800 × 480, 1024 × 600  the reference layout
+//   1280 × 800 and up      more columns, bigger ring and clock
+//   480 × 800, 720 × 1280  portrait: bottom tab bar, panels stack top to bottom
+
+export global Layout {
+    in-out property <length> width: 800px;
+    in-out property <length> height: 480px;
+
+    // Taller than wide: navigation moves to a bottom tab bar and panels stack.
+    out property <bool> portrait: height > width;
+    // Too short for the full header and labelled rail.
+    out property <bool> short: height < 400px;
+    // Too narrow for two panels side by side at their full size.
+    out property <bool> narrow: width < 640px;
+    out property <bool> compact: short || narrow;
+    // Room to spare: bigger ring, clock and grid.
+    out property <bool> large: !compact && min(width, height) >= 700px;
+
+    // ── navigation ──
+    out property <bool> rail-labels: height >= 360px;
+    out property <bool> rail-logo: height >= 470px;
+    out property <length> rail-width: portrait ? 0px : !rail-labels ? 64px : narrow ? 76px : 88px;
+    out property <length> tabbar-height: portrait ? (compact ? 60px : 68px) : 0px;
+    out property <length> header-height: short ? 56px : compact ? 64px : 76px;
+
+    // ── page rhythm ──
+    out property <length> pad-left: compact ? 14px : 24px;
+    out property <length> pad-right: compact ? 14px : 20px;
+    out property <length> pad-bottom: compact ? 12px : 20px;
+    out property <length> gap: compact ? 10px : 16px;
+    out property <length> card-pad: compact ? 12px : 18px;
+
+    // The area a page gets below its header.
+    out property <length> content-width: width - rail-width;
+    out property <length> content-height: height - header-height - tabbar-height;
+    // Width a page has for its cards, after the side padding.
+    out property <length> inner-width: content-width - pad-left - pad-right;
+    // Pages with two panels stack them top to bottom when the screen is portrait, or narrow
+    // with height to spare (480 × 480). Short screens keep them side by side, just smaller.
+    out property <bool> stack: portrait || (narrow && !short);
+
+    // Settings: tab look (0 labelled side tabs, 1 icon-only side tabs, 2 a strip on top) and the
+    // card's inner width, which decides whether a control fits beside its label.
+    out property <int> settings-tabs: stack ? 2 : inner-width >= 560px ? 0 : 1;
+    out property <length> settings-inner: inner-width - 2 * card-pad
+        - (settings-tabs == 2 ? 0px : (settings-tabs == 0 ? 186px : 50px) + gap);
+
+    // PIN keypad key size: fits four rows of keys plus the dots in the screen height (and, when
+    // stacked, the clock or heading above the pad).
+    out property <length> key-height: clamp((height - (stack ? 250px : 130px)) / 4.4, 40px, 64px);
+    out property <length> key-width: clamp(key-height * 1.2, 56px, 76px);
+}

@@ -1,0 +1,344 @@
+// The live brew: progress ring + water/coffee chart while brewing, then the result.
+// Landscape puts the ring beside the chart; portrait stacks them. The Stop button is in the
+// bottom row in every layout, so it is always on screen.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, Page, Overlay } from "../state.slint";
+import { Icon, Chip, Card, Button, ButtonKind, Ring, BrewChart, SectionTitle } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component StageChip inherits Rectangle {
+    in property <string> label;
+    in property <bool> done;
+    in property <bool> current;
+    height: Layout.compact ? 30px : 34px;
+    border-radius: self.height / 2;
+    background: current ? Theme.accent : done ? Theme.accent-soft : Theme.surface-2;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 14px;
+        spacing: 6px;
+        if root.done && !root.current: Icon {
+            y: (parent.height - self.height) / 2;
+            source: Icons.check;
+            tint: Theme.accent-strong;
+            width: 14px;
+            height: 14px;
+        }
+        Text {
+            text: root.label;
+            color: root.current ? Theme.accent-ink : root.done ? Theme.accent-strong : Theme.text-2;
+            font-size: Theme.fs-caption;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// The progress ring with the water number, sized to the panel it's given.
+component RingPanel inherits Card {
+    in property <bool> waiting;
+    in property <bool> preparing;
+    property <length> pad: Layout.card-pad;
+    property <length> chips-h: 30px + (Layout.compact ? 8px : 12px);
+    property <length> ring: clamp(min(self.width - 2 * pad, self.height - 2 * pad - chips-h), 80px, 420px);
+    // A narrow panel has room for one chip.
+    property <bool> one-chip: self.width < 230px;
+    ring-el := Ring {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height - root.chips-h) / 2;
+        width: root.ring;
+        height: root.ring;
+        thickness: root.ring < 160px ? 10px : root.ring > 280px ? 18px : 14px;
+        progress: AppState.brew.progress;
+        VerticalLayout {
+            alignment: center;
+            spacing: 0px;
+            if root.waiting || root.preparing: Icon {
+                x: (parent.width - self.width) / 2;
+                source: root.waiting ? Icons.hand : Icons.bluetooth-on;
+                tint: Theme.accent;
+                width: 40px;
+                height: 40px;
+            }
+            if !root.waiting && !root.preparing: Text {
+                text: round(AppState.brew.water);
+                color: Theme.text;
+                font-size: root.ring < 150px ? Theme.fs-hero : Theme.fs-display;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: root.waiting || root.preparing ? "" : "of " + round(AppState.brew.target) + " g water";
+                color: Theme.text-2;
+                font-size: root.ring < 150px ? Theme.fs-caption : Theme.fs-small;
+                horizontal-alignment: center;
+            }
+        }
+    }
+    HorizontalLayout {
+        y: ring-el.y + ring-el.height + root.chips-h - 30px;
+        height: 30px;
+        alignment: center;
+        spacing: 8px;
+        if root.one-chip: Chip { has-icon: true; icon: Icons.timer; text: AppState.brew.elapsed + " · " + round(AppState.brew.coffee) + " g"; }
+        if !root.one-chip: Chip { has-icon: true; icon: Icons.timer; text: AppState.brew.elapsed; }
+        if !root.one-chip: Chip { has-icon: true; icon: Icons.coffee; text: round(AppState.brew.coffee) + " g in cup"; }
+    }
+}
+
+// What's happening now: the message and the stage.
+component StatusCard inherits Card {
+    in property <bool> waiting;
+    in property <bool> preparing;
+    in property <string> stage;
+    property <length> badge: Layout.short ? 36px : 44px;
+    height: Layout.short ? 56px : Layout.compact ? 66px : 82px;
+    background: root.waiting ? Theme.accent-soft : Theme.surface;
+    border-color: root.waiting ? Theme.accent.transparentize(0.6) : Theme.border;
+    HorizontalLayout {
+        padding-left: Layout.compact ? 12px : 18px;
+        padding-right: Layout.compact ? 12px : 18px;
+        spacing: Layout.compact ? 10px : 14px;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: root.badge;
+            height: root.badge;
+            border-radius: self.width / 2;
+            background: root.waiting ? Theme.accent : Theme.surface-2;
+            Icon {
+                source: root.waiting ? Icons.hand : root.stage == "grinding" ? Icons.gauge : Icons.droplet;
+                tint: root.waiting ? Theme.accent-ink : Theme.water;
+                width: root.badge / 2;
+                height: root.badge / 2;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: AppState.brew.message;
+                color: Theme.text;
+                font-size: Theme.fs-h2;
+                font-weight: 700;
+                overflow: elide;
+            }
+            Text {
+                text: root.waiting ? "Press start on the xBloom to begin." : root.stage == "grinding" ? "Quiet for ~20 s — that's normal."
+                    : root.preparing ? "Talking to the machine…" : AppState.brew.stages.length > 0 ? AppState.brew.stages[AppState.brew.stage-index] + " · " + (AppState.brew.stage-index + 1) + " of " + AppState.brew.stages.length : "";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+// The pour stages and the Stop button.
+component StopRow inherits HorizontalLayout {
+    property <length> chip-h: Layout.compact ? 30px : 34px;
+    spacing: 8px;
+    height: Layout.compact ? 46px : 52px;
+    Flickable {
+        horizontal-stretch: 1;
+        // Scrolls instead of claiming its content's width (which would squeeze Stop).
+        min-width: 0px;
+        content-width: stages.preferred-width;
+        stages := HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            padding-top: (root.height - root.chip-h) / 2;
+            padding-bottom: (root.height - root.chip-h) / 2;
+            for s[i] in AppState.brew.stages: StageChip {
+                label: s;
+                done: i < AppState.brew.stage-index || AppState.brew.stage == "drawdown";
+                current: i == AppState.brew.stage-index && (AppState.brew.stage == "brewing");
+            }
+        }
+    }
+    Button {
+        horizontal-stretch: 0;
+        min-width: self.preferred-width;
+        min-height: root.height;
+        pad-x: Layout.compact ? 16px : 22px;
+        text: "Stop";
+        kind: ButtonKind.danger;
+        has-icon: true;
+        icon: Icons.close;
+        clicked => { AppState.overlay = Overlay.cancel-brew; }
+    }
+}
+
+component Live inherits Rectangle {
+    property <string> stage: AppState.brew.stage;
+    property <bool> waiting: stage == "armed" || stage == "awaiting_confirm";
+    property <bool> preparing: stage == "connecting" || stage == "loading" || stage == "starting";
+    // Stacked layouts show the chart only when there's height for it.
+    property <bool> stacked-chart: Layout.content-height >= 560px;
+
+    if !Layout.stack: HorizontalLayout {
+        padding-left: Layout.pad-left;
+        padding-right: Layout.pad-right;
+        padding-bottom: Layout.pad-bottom;
+        spacing: Layout.gap;
+        RingPanel {
+            width: Layout.short ? 176px : Layout.narrow ? 200px : Layout.large ? 380px : 300px;
+            waiting: root.waiting;
+            preparing: root.preparing;
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Layout.compact ? 8px : 12px;
+            StatusCard { waiting: root.waiting; preparing: root.preparing; stage: root.stage; }
+            BrewChart {
+                vertical-stretch: 1;
+                water: AppState.chart-water;
+                coffee: AppState.chart-coffee;
+                target-y: AppState.chart-target-y;
+            }
+            StopRow {}
+        }
+    }
+    if Layout.stack: VerticalLayout {
+        padding-left: Layout.pad-left;
+        padding-right: Layout.pad-right;
+        padding-bottom: Layout.pad-bottom;
+        spacing: Layout.compact ? 8px : 12px;
+        RingPanel {
+            vertical-stretch: 1;
+            min-height: 150px;
+            waiting: root.waiting;
+            preparing: root.preparing;
+        }
+        StatusCard { waiting: root.waiting; preparing: root.preparing; stage: root.stage; }
+        if root.stacked-chart: BrewChart {
+            vertical-stretch: 1;
+            water: AppState.chart-water;
+            coffee: AppState.chart-coffee;
+            target-y: AppState.chart-target-y;
+        }
+        StopRow {}
+    }
+}
+
+// The outcome, with Done / Brew again.
+component ResultPanel inherits Card {
+    property <bool> ok: AppState.brew.success;
+    // Height the panel can have below the header.
+    property <length> room: Layout.content-height - Layout.pad-bottom;
+    // Buttons side by side when stacked (the panel is wide) or without room to stack them.
+    property <bool> row-buttons: Layout.stack || room < 380px;
+    property <length> badge: room < 260px ? 48px : room < 340px ? 56px : Layout.compact ? 64px : 96px;
+    VerticalLayout {
+        padding: root.room < 260px ? 12px : Layout.compact ? 16px : 24px;
+        spacing: root.room < 260px ? 8px : 14px;
+        alignment: center;
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            width: root.badge;
+            height: root.badge;
+            border-radius: self.width / 2;
+            background: root.ok ? Theme.success-soft : AppState.brew.error ? Theme.danger-soft : Theme.warning-soft;
+            Icon {
+                source: root.ok ? Icons.check-circle : Icons.alert;
+                tint: root.ok ? Theme.success : AppState.brew.error ? Theme.danger : Theme.warning;
+                width: root.badge / 2;
+                height: root.badge / 2;
+            }
+        }
+        Text {
+            text: AppState.brew.message;
+            color: Theme.text;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+        }
+        if root.ok: Text {
+            text: round(AppState.brew.water) + " g water  ·  " + round(AppState.brew.coffee) + " g in cup  ·  " + AppState.brew.elapsed;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+        }
+        if root.room >= 260px: Rectangle { height: 6px; }
+        if !root.row-buttons: Button {
+            text: "Done";
+            clicked => { AppState.brew-dismiss(); }
+        }
+        if !root.row-buttons: Button {
+            text: root.ok ? "Brew again" : "Try again";
+            kind: ButtonKind.secondary;
+            clicked => {
+                AppState.brew-dismiss();
+                AppState.open-recipe(AppState.current.id);
+            }
+        }
+        if root.row-buttons: HorizontalLayout {
+            spacing: 8px;
+            Button {
+                horizontal-stretch: 1;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: 12px;
+                text: "Done";
+                clicked => { AppState.brew-dismiss(); }
+            }
+            Button {
+                horizontal-stretch: 1;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: 12px;
+                text: root.ok ? "Brew again" : "Try again";
+                kind: ButtonKind.secondary;
+                clicked => {
+                    AppState.brew-dismiss();
+                    AppState.open-recipe(AppState.current.id);
+                }
+            }
+        }
+    }
+}
+
+component Result inherits Rectangle {
+    if !Layout.stack: HorizontalLayout {
+        padding-left: Layout.pad-left;
+        padding-right: Layout.pad-right;
+        padding-bottom: Layout.pad-bottom;
+        spacing: Layout.gap;
+        ResultPanel { width: Layout.short ? 210px : Layout.narrow ? 220px : Layout.large ? 380px : 300px; }
+        BrewChart {
+            horizontal-stretch: 1;
+            water: AppState.chart-water;
+            coffee: AppState.chart-coffee;
+            target-y: AppState.chart-target-y;
+        }
+    }
+    if Layout.stack: VerticalLayout {
+        padding-left: Layout.pad-left;
+        padding-right: Layout.pad-right;
+        padding-bottom: Layout.pad-bottom;
+        spacing: Layout.gap;
+        ResultPanel { vertical-stretch: 0; }
+        if Layout.content-height >= 440px: BrewChart {
+            vertical-stretch: 1;
+            water: AppState.chart-water;
+            coffee: AppState.chart-coffee;
+            target-y: AppState.chart-target-y;
+        }
+        if Layout.content-height < 440px: Rectangle { vertical-stretch: 1; }
+    }
+}
+
+export component BrewingPage inherits Rectangle {
+    VerticalLayout {
+        Header {
+            show-back: AppState.brew.finished;
+            title: AppState.brew.recipe;
+            subtitle: AppState.brew.remote ? "Started from the screen" : "Approve on the machine";
+            back => { AppState.brew-dismiss(); }
+        }
+        if !AppState.brew.finished: Live { vertical-stretch: 1; }
+        if AppState.brew.finished: Result { vertical-stretch: 1; }
+    }
+}

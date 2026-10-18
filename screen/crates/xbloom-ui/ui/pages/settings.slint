@@ -1,0 +1,501 @@
+// On-device admin settings (behind the admin PIN). Recipes, videos and photos are managed
+// from the web admin panel (phone/laptop) — the "Admin panel" tab shows its QR code.
+//
+// Tabs sit down the left (with labels on regular screens, icons only on short ones) or, when
+// stacked (portrait, square), in a scrolling strip above the card.
+
+import { Theme, Accents } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, LinkState, ScanRow, MediaRow } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, Toggle, Segmented, Stepper, Slider, SettingRow, SectionTitle, Chip } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+enum TabLook { side, icon, chip }
+
+component Tab inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> active;
+    in property <TabLook> look: TabLook.side;
+    callback clicked();
+    height: look == TabLook.chip ? 42px : look == TabLook.icon ? 46px : 50px;
+    width: look == TabLook.icon ? 50px : look == TabLook.chip ? row.preferred-width : self.preferred-width;
+    border-radius: look == TabLook.chip ? 21px : 14px;
+    background: active ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : look == TabLook.chip ? Theme.surface : transparent;
+    border-width: look == TabLook.chip && !active ? 1px : 0px;
+    border-color: Theme.border;
+    if root.look == TabLook.icon: Icon {
+        source: root.icon;
+        tint: root.active ? Theme.accent-strong : Theme.text-2;
+        width: 22px;
+        height: 22px;
+    }
+    row := HorizontalLayout {
+        visible: root.look != TabLook.icon;
+        padding-left: 14px;
+        padding-right: root.look == TabLook.chip ? 16px : 0px;
+        spacing: root.look == TabLook.chip ? 8px : 12px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            source: root.icon;
+            tint: root.active ? Theme.accent-strong : Theme.text-2;
+            width: root.look == TabLook.chip ? 18px : 20px;
+            height: self.width;
+        }
+        Text {
+            text: root.label;
+            color: root.active ? Theme.accent-strong : Theme.text;
+            font-size: root.look == TabLook.chip ? Theme.fs-small : Theme.fs-body;
+            font-weight: root.active ? 700 : 600;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
+component MachineTab inherits VerticalLayout {
+    spacing: Layout.compact ? 10px : 14px;
+    Card {
+        height: Layout.compact ? 84px : 104px;
+        HorizontalLayout {
+            padding: Layout.compact ? 12px : 18px;
+            spacing: Layout.compact ? 10px : 16px;
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: Layout.compact ? 44px : 56px;
+                height: self.width;
+                border-radius: self.width / 2;
+                background: AppState.link == LinkState.connected ? Theme.success-soft : Theme.surface-2;
+                Icon {
+                    source: AppState.link == LinkState.connected ? Icons.bluetooth-on : Icons.bluetooth-off;
+                    tint: AppState.link == LinkState.connected ? Theme.success : Theme.text-3;
+                    width: 26px;
+                    height: 26px;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 3px;
+                horizontal-stretch: 1;
+                Text {
+                    text: AppState.machine-name + (AppState.simulator ? " · demo" : "");
+                    color: Theme.text;
+                    font-size: Theme.fs-body;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: AppState.machine-detail;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-small;
+                    overflow: elide;
+                }
+            }
+            if AppState.link == LinkState.connected: Button {
+                y: (parent.height - self.height) / 2;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: Layout.compact ? 14px : 22px;
+                text: "Disconnect";
+                kind: ButtonKind.outline;
+                clicked => { AppState.disconnect(); }
+            }
+            if AppState.link != LinkState.connected && (AppState.paired || AppState.simulator): Button {
+                y: (parent.height - self.height) / 2;
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: Layout.compact ? 14px : 22px;
+                text: AppState.link == LinkState.connecting ? "Connecting…" : "Connect";
+                enabled: AppState.link == LinkState.disconnected;
+                clicked => { AppState.connect(); }
+            }
+        }
+    }
+    HorizontalLayout {
+        SectionTitle { text: "FIND A MACHINE"; vertical-alignment: center; horizontal-stretch: 1; }
+        Button {
+            text: AppState.scanning ? "Scanning…" : "Scan";
+            has-icon: true;
+            icon: Icons.refresh;
+            kind: ButtonKind.secondary;
+            enabled: !AppState.scanning && !AppState.simulator;
+            min-height: 40px;
+            clicked => { AppState.scan(); }
+        }
+    }
+    if AppState.scan-results.length == 0: Text {
+        text: AppState.simulator ? "Demo mode drives a simulated machine — turn it off below to pair a real one."
+            : "Close the xBloom phone app first — the machine accepts one Bluetooth connection at a time.";
+        color: Theme.text-3;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+    for d in AppState.scan-results: Rectangle {
+        height: 56px;
+        border-radius: 14px;
+        background: ta.pressed ? Theme.surface-2 : Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 16px;
+            spacing: 12px;
+            Icon { y: (parent.height - self.height) / 2; source: Icons.bluetooth; tint: Theme.accent; }
+            Text { text: d.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
+            Text { text: d.signal; color: Theme.text-3; font-size: Theme.fs-caption; vertical-alignment: center; }
+            Text { text: "Pair"; color: Theme.accent-strong; font-size: Theme.fs-small; font-weight: 700; vertical-alignment: center; }
+        }
+        ta := TouchArea { clicked => { AppState.pair(d.address); } }
+    }
+    SettingRow {
+        title: "Connect automatically";
+        description: "Hold the link open for instant brews and reconnect when it drops.";
+        Toggle { checked: AppState.auto-connect; toggled(v) => { AppState.set-auto-connect(v); } }
+    }
+    SettingRow {
+        title: "Demo mode";
+        description: "Use a built-in simulated machine — try everything with no coffee machine.";
+        Toggle { checked: AppState.simulator; toggled(v) => { AppState.set-simulator(v); } }
+    }
+    if AppState.paired && !AppState.simulator: Button {
+        text: "Forget this machine";
+        kind: ButtonKind.ghost;
+        clicked => { AppState.forget(); }
+    }
+}
+
+component DisplayTab inherits VerticalLayout {
+    spacing: 4px;
+    SettingRow {
+        title: "Theme";
+        description: "Auto switches to dark from 7 pm to 7 am.";
+        Segmented {
+            preferred-width: 270px;
+            options: ["Light", "Dark", "Auto"];
+            selected: AppState.theme-mode;
+            changed(i) => { AppState.set-theme(i); }
+        }
+    }
+    SettingRow {
+        title: "Accent colour";
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: end;
+            cross-axis-alignment: center;
+            for c in Accents.list: Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 18px;
+                background: c;
+                border-width: c == Theme.accent ? 3px : 0px;
+                border-color: Theme.text;
+                TouchArea { clicked => { AppState.activity(); AppState.set-accent(c); } }
+            }
+        }
+    }
+    SettingRow {
+        title: "Brightness";
+        Slider {
+            preferred-width: 270px;
+            minimum: 10;
+            maximum: 100;
+            value: AppState.brightness;
+            released(v) => { AppState.set-brightness(v); }
+        }
+    }
+    SettingRow {
+        title: "Interface size";
+        description: "Bigger or smaller text and controls.";
+        Stepper {
+            value: AppState.ui-scale;
+            minimum: 70;
+            maximum: AppState.ui-scale-max;
+            step: 10;
+            unit: "%";
+            changed(v) => { AppState.set-ui-scale(v); }
+        }
+    }
+    if AppState.can-rotate: SettingRow {
+        title: "Rotation";
+        description: "Turn the picture and touch to match how the screen is mounted. The screen restarts to apply it.";
+        Segmented {
+            preferred-width: 270px;
+            options: ["0°", "90°", "180°", "270°"];
+            selected: AppState.rotation;
+            changed(i) => { AppState.set-rotation(i); }
+        }
+    }
+    SettingRow {
+        title: "24-hour clock";
+        Toggle { checked: AppState.clock-24h; toggled(v) => { AppState.set-clock-24h(v); } }
+    }
+}
+
+component SaverTab inherits VerticalLayout {
+    spacing: 4px;
+    SettingRow {
+        title: "Screensaver";
+        description: "Videos and photos are uploaded from the admin panel.";
+        Segmented {
+            preferred-width: 310px;
+            options: ["Off", "Clock", "Video", "Photos"];
+            selected: AppState.saver-mode;
+            changed(i) => { AppState.set-saver-mode(i); }
+        }
+    }
+    SettingRow {
+        title: "Start after";
+        Stepper {
+            value: AppState.saver-idle-min;
+            minimum: 1;
+            maximum: 60;
+            unit: " min";
+            changed(v) => { AppState.set-saver-idle(v); }
+        }
+    }
+    SettingRow {
+        title: "Show the clock";
+        description: "Over videos and photos.";
+        Toggle { checked: AppState.saver-clock-overlay; toggled(v) => { AppState.set-saver-clock(v); } }
+    }
+    SectionTitle { text: "VIDEO"; height: 34px; vertical-alignment: bottom; }
+    if AppState.media.length == 0: Text {
+        text: "No videos yet. Open the admin panel → Screensaver to upload one (it's converted on your phone).";
+        color: Theme.text-3;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+    for m in AppState.media: Rectangle {
+        height: 54px;
+        border-radius: 14px;
+        background: m.name == AppState.saver-video ? Theme.accent-soft : ta.pressed ? Theme.surface-2 : transparent;
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 12px;
+            Icon { y: (parent.height - self.height) / 2; source: m.video ? Icons.film : Icons.image; tint: m.name == AppState.saver-video ? Theme.accent-strong : Theme.text-2; }
+            Text { text: m.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+            Text { text: m.detail; color: Theme.text-3; font-size: Theme.fs-caption; vertical-alignment: center; }
+        }
+        ta := TouchArea { clicked => { if (m.video) { AppState.set-saver-video(m.name); } } }
+    }
+}
+
+component SecurityTab inherits VerticalLayout {
+    spacing: 4px;
+    SettingRow {
+        title: "Lock";
+        description: AppState.lock-mode == 0 ? "Anyone can brew. Settings always need the admin PIN."
+            : AppState.lock-mode == 1 ? "Browsing is free; starting a brew asks for a PIN."
+            : "The screen locks after the screensaver; a PIN unlocks it.";
+        Segmented {
+            preferred-width: 236px;
+            options: ["Off", "Brew", "Screen"];
+            selected: AppState.lock-mode;
+            changed(i) => { AppState.set-lock-mode(i); }
+        }
+    }
+    SettingRow {
+        title: "Lock PIN";
+        description: AppState.has-user-pin ? "A separate PIN for brewing / unlocking (the admin PIN works too)." : "Not set — the admin PIN unlocks.";
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            cross-axis-alignment: center;
+            if AppState.has-user-pin: Button { text: "Remove"; kind: ButtonKind.ghost; min-height: 44px; clicked => { AppState.clear-user-pin(); } }
+            Button { text: AppState.has-user-pin ? "Change" : "Set PIN"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.set-user-pin(); } }
+        }
+    }
+    SettingRow {
+        title: "Re-lock after";
+        Stepper {
+            value: AppState.auto-lock-min;
+            minimum: 1;
+            maximum: 60;
+            unit: " min";
+            changed(v) => { AppState.set-auto-lock(v); }
+        }
+    }
+    SettingRow {
+        title: "Remote start";
+        description: "Show “Hold to brew”. Off: the screen only loads recipes and you press start on the machine.";
+        Toggle { checked: AppState.allow-remote-start; toggled(v) => { AppState.set-remote-start(v); } }
+    }
+    SettingRow {
+        title: "Hold to brew for";
+        Stepper {
+            value: AppState.hold-ms / 100;
+            minimum: 5;
+            maximum: 30;
+            unit: "";
+            display: (self.value / 10) + " s";
+            changed(v) => { AppState.set-hold-ms(v * 100); }
+        }
+    }
+    SettingRow {
+        title: "Admin PIN";
+        description: "Protects these settings and the admin panel.";
+        Button { text: "Change"; kind: ButtonKind.secondary; min-height: 44px; clicked => { AppState.change-admin-pin(); } }
+    }
+}
+
+component AdminText inherits VerticalLayout {
+    spacing: 8px;
+    alignment: start;
+    Text {
+        text: "Manage from your phone";
+        color: Theme.text;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+        wrap: word-wrap;
+    }
+    Text {
+        text: "Open the address on any phone or laptop on the same network and sign in with the admin PIN: edit and import recipes, upload screensaver videos and photos, set the dial presets, download your history.";
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+    Text {
+        text: AppState.admin-url;
+        color: Theme.accent-strong;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+        wrap: word-wrap;
+    }
+    if AppState.admin-hint != "": Text {
+        text: AppState.admin-hint;
+        color: Theme.text-2;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+}
+
+component AdminQr inherits Rectangle {
+    in property <length> size: 168px;
+    width: size;
+    height: size;
+    border-radius: 16px;
+    background: #ffffff;
+    border-width: 1px;
+    border-color: Theme.border;
+    Image {
+        width: root.size - 20px;
+        height: root.size - 20px;
+        source: AppState.admin-qr;
+        image-rendering: pixelated;
+    }
+}
+
+component AdminTab inherits VerticalLayout {
+    property <bool> side: Layout.settings-inner >= 380px;
+    property <length> qr: Layout.compact ? 136px : 168px;
+    if root.side: HorizontalLayout {
+        spacing: Layout.compact ? 12px : 18px;
+        AdminQr { size: root.qr; }
+        AdminText { horizontal-stretch: 1; }
+    }
+    if !root.side: VerticalLayout {
+        spacing: 12px;
+        AdminQr { x: (parent.width - self.width) / 2; size: root.qr; }
+        AdminText {}
+    }
+}
+
+component AboutTab inherits VerticalLayout {
+    spacing: 4px;
+    SettingRow { title: "Version"; Text { text: AppState.version; color: Theme.text-2; vertical-alignment: center; } }
+    SettingRow { title: "Hardware"; Text { text: AppState.platform; color: Theme.text-2; vertical-alignment: center; } }
+    SettingRow { title: "Storage"; Text { text: AppState.storage; color: Theme.text-2; vertical-alignment: center; } }
+    SettingRow { title: "Library"; Text { text: AppState.recipe-count + " recipes · " + AppState.brew-count + " brews"; color: Theme.text-2; vertical-alignment: center; } }
+    SettingRow {
+        title: "Restart";
+        description: "Restart the screen app.";
+        Button { text: "Restart"; kind: ButtonKind.outline; min-height: 44px; has-icon: true; icon: Icons.power; clicked => { AppState.restart(); } }
+    }
+    Text {
+        text: "Unofficial — not affiliated with xBloom. Loading a recipe only arms the machine; a brew starts only when you hold “Hold to brew” or press start on the machine.";
+        color: Theme.text-3;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+}
+
+export component SettingsPage inherits Rectangle {
+    property <TabLook> look: Layout.settings-tabs == 2 ? TabLook.chip : Layout.settings-tabs == 0 ? TabLook.side : TabLook.icon;
+    property <length> tabs-w: look == TabLook.side ? 186px : look == TabLook.icon ? 50px : 0px;
+    property <[string]> names: ["Machine", "Display", "Screensaver", "Security", "Admin panel", "About"];
+    property <[image]> icons: [Icons.bluetooth, Icons.sun, Icons.film, Icons.shield, Icons.qr, Icons.info];
+
+    VerticalLayout {
+        Header { title: "Settings"; subtitle: AppState.device-name; }
+        if root.look == TabLook.chip: Flickable {
+            height: 52px;
+            min-width: 0px;
+            content-width: strip.preferred-width;
+            strip := HorizontalLayout {
+                padding-left: Layout.pad-left;
+                padding-right: Layout.pad-right;
+                padding-bottom: 10px;
+                spacing: 8px;
+                alignment: start;
+                for name[i] in root.names: Tab {
+                    look: TabLook.chip;
+                    label: name;
+                    icon: root.icons[i];
+                    active: AppState.settings-tab == i;
+                    clicked => { AppState.settings-tab = i; }
+                }
+            }
+        }
+        HorizontalLayout {
+            vertical-stretch: 1;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            padding-bottom: Layout.pad-bottom;
+            spacing: Layout.gap;
+            if root.look != TabLook.chip: VerticalLayout {
+                width: root.tabs-w;
+                spacing: 4px;
+                alignment: start;
+                for name[i] in root.names: Tab {
+                    look: root.look;
+                    label: name;
+                    icon: root.icons[i];
+                    active: AppState.settings-tab == i;
+                    clicked => { AppState.settings-tab = i; }
+                }
+            }
+            Card {
+                horizontal-stretch: 1;
+                Flickable {
+                    content-width: self.width;
+                    content-height: content.preferred-height;
+                    flicked => { AppState.activity(); }
+                    content := VerticalLayout {
+                        width: parent.width;
+                        padding: Layout.card-pad;
+                        padding-top: 8px;
+                        // Icon-only tabs: name the section.
+                        if root.look == TabLook.icon: Text {
+                            text: root.names[AppState.settings-tab];
+                            color: Theme.text;
+                            font-size: Theme.fs-h2;
+                            font-weight: 700;
+                            height: 36px;
+                            vertical-alignment: center;
+                        }
+                        if AppState.settings-tab == 0: MachineTab {}
+                        if AppState.settings-tab == 1: DisplayTab {}
+                        if AppState.settings-tab == 2: SaverTab {}
+                        if AppState.settings-tab == 3: SecurityTab {}
+                        if AppState.settings-tab == 4: AdminTab { padding-top: 10px; }
+                        if AppState.settings-tab == 5: AboutTab {}
+                    }
+                }
+            }
+        }
+    }
+}

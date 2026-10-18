@@ -16,6 +16,7 @@ Use `feat!:` or a `BREAKING CHANGE:` footer for a breaking change.
 - [ ] PR title is a valid Conventional Commit (`feat:` / `fix:` / `docs:` / …)
 - [ ] `ruff check .` passes
 - [ ] `pytest -q` passes
+- [ ] Touched `screen/`? `cargo test --workspace`, `cargo fmt --all --check` and `cargo clippy` pass (in `screen/`)
 - [ ] Docs updated if behaviour/protocol changed
 - [ ] **Safety preserved:** no new code path emits a brew-start opcode (`0x42`/`0x46`) on the default load path
 - [ ] No personal data (MAC addresses, serials, names, private paths)

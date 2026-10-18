@@ -1,0 +1,159 @@
+name: Screen
+
+# The xBloom Screen (screen/): the Rust core/app/UI crates, the Raspberry Pi binary and the
+# ESP32-S3 firmware.
+#
+# - Every PR / push: golden-vector parity with the Python reference, fmt, clippy, tests, and
+#   both target builds.
+# - Push to main: the builds are published to the rolling `screen-latest` pre-release (what
+#   screen/deploy/install.sh downloads by default).
+# - Tag `screen-vX.Y.Z`: a versioned release with the same assets.
+
+on:
+  pull_request:
+    paths: ["screen/**", "xbloom_ble/**", "recipes/**", ".github/workflows/screen.yml"]
+  push:
+    branches: [main]
+    paths: ["screen/**", "xbloom_ble/**", "recipes/**", ".github/workflows/screen.yml"]
+    tags: ["screen-v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screen-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Host build dependencies of the Pi app (libinput/udev for DRM kiosk mode, xkbcommon,
+  # fontconfig, D-Bus for BlueZ).
+  APT_DEPS: pkg-config libudev-dev libinput-dev libxkbcommon-dev libfontconfig-dev libdbus-1-dev
+
+jobs:
+  golden:
+    name: golden vectors match the Python reference
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: python screen/tools/gen_golden.py --check
+
+  rust:
+    name: fmt · clippy · test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: screen
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $APT_DEPS
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: screen
+      - run: cargo fmt --all --check
+      - name: rustfmt (ESP32 firmware sources)
+        run: rustfmt --check --edition 2021 firmware/esp32s3/src/main.rs
+      - run: cargo clippy --workspace --all-targets --features xbloom-ui/screenshot -- -D warnings
+      - run: cargo test --workspace
+
+  pi:
+    name: Raspberry Pi build (aarch64)
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: screen
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $APT_DEPS
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: screen
+          key: pi
+      - run: cargo build --release --locked -p xbloom-screen --no-default-features --features backend-linuxkms
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/release/xbloom-screen dist/
+          cp ../LICENSE dist/ 2>/dev/null || true
+          tar -czf xbloom-screen-aarch64-linux.tar.gz -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pi
+          path: screen/xbloom-screen-aarch64-linux.tar.gz
+
+  firmware:
+    name: ESP32-S3 firmware
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: screen/firmware/esp32s3
+    steps:
+      - uses: actions/checkout@v4
+      # The Xtensa Rust toolchain, pinned. 1.97.0.0's LLVM aborts on selects between float
+      # constants ("Cannot select XtensaISD::PCREL_WRAPPER"), which Slint UIs are full of, and
+      # 1.99.0.0's std no longer builds for ESP-IDF (fchmodat); 1.98.1.0 does both.
+      - uses: esp-rs/xtensa-toolchain@v1.6
+        with:
+          default: true
+          buildtargets: esp32s3
+          ldproxy: true
+          version: "1.98.1.0"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: espflash
+      - uses: actions/cache@v4
+        with:
+          path: ~/.espressif
+          key: espressif-${{ runner.os }}-v5.5.6
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: screen/firmware/esp32s3
+      - run: cargo build --release --locked
+      # Bootloader + partition table + app in one file to write at 0x0. Unpadded, so flashing
+      # an update stops before the data partition and keeps recipes and settings.
+      - name: Flashable image
+        run: |
+          OUT=target/xtensa-esp32s3-espidf/release
+          espflash save-image --chip esp32s3 --merge --skip-padding --flash-size 16mb \
+            --bootloader "$OUT/bootloader.bin" --partition-table partitions.csv \
+            "$OUT/xbloom-screen-esp32s3" xbloom-screen-esp32s3.bin
+          ls -l xbloom-screen-esp32s3.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: screen/firmware/esp32s3/xbloom-screen-esp32s3.bin
+
+  release:
+    name: Publish
+    needs: [golden, rust, pi, firmware]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/screen-v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          FILES="xbloom-screen-aarch64-linux.tar.gz xbloom-screen-esp32s3.bin"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            gh release create "$GITHUB_REF_NAME" $FILES --title "xBloom Screen ${GITHUB_REF_NAME#screen-}" --generate-notes
+          else
+            gh release delete screen-latest --yes --cleanup-tag 2>/dev/null || true
+            gh release create screen-latest $FILES --prerelease --target "$GITHUB_SHA" \
+              --title "xBloom Screen (latest main)" \
+              --notes "Rolling build of \`main\` at ${GITHUB_SHA::7}. Raspberry Pi: \`screen/deploy/install.sh\`. ESP32-S3: flash \`xbloom-screen-esp32s3.bin\` at 0x0."
+          fi

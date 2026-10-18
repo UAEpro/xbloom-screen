@@ -1,0 +1,43 @@
+[package]
+name = "xbloom-screen-esp32s3"
+description = "xBloom Screen firmware for ESP32-S3 touch displays: the shared touchscreen UI, admin web panel and machine driver on a microcontroller."
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/uaepro/xbloom-screen"
+publish = false
+
+[[bin]]
+name = "xbloom-screen-esp32s3"
+harness = false
+
+[features]
+default = ["board-sunton-8048s043"]
+# Sunton ESP32-8048S043C: 4.3" 800×480 RGB panel, GT911 touch, 16 MB flash, 8 MB PSRAM.
+board-sunton-8048s043 = []
+
+[dependencies]
+xbloom-core = { path = "../../crates/xbloom-core", features = ["std"] }
+xbloom-app = { path = "../../crates/xbloom-app" }
+xbloom-ui = { path = "../../crates/xbloom-ui", default-features = false, features = ["mcu"] }
+esp-idf-svc = "0.53"
+esp32-nimble = "0.13"
+slint = { version = "1.18", default-features = false, features = ["compat-1-2", "unsafe-single-threaded", "libm", "renderer-software", "software-renderer-path"] }
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+getrandom = "0.4"
+
+[build-dependencies]
+embuild = "0.33"
+
+[profile.release]
+# Smallest code: it runs from PSRAM (XiP), so every byte of code is a byte less for the frame
+# buffers and the heap. "z" is ~680 KB smaller than "s" for this app.
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+debug = false
+
+[profile.dev]
+debug = true
+opt-level = "z"

@@ -1,0 +1,261 @@
+// Home: pick a recipe. Landscape screens show a horizontally scrolling row of recipe tiles;
+// screens with room for two rows (portrait, 1024 × 600 and up) show a scrolling grid.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, RecipeCard, Page, PourInfo } from "../state.slint";
+import { Icon, Chip, Card } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component MiniStat inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 2px;
+    Text {
+        text: root.label;
+        color: Theme.text-3;
+        font-size: Theme.fs-caption;
+        font-weight: 600;
+    }
+    Text {
+        text: root.value;
+        color: Theme.text;
+        font-size: Theme.fs-body;
+        font-weight: 700;
+    }
+}
+
+component PourProfile inherits HorizontalLayout {
+    in property <[PourInfo]> pours;
+    in property <color> tint;
+    spacing: 3px;
+    height: 8px;
+    for p in root.pours: Rectangle {
+        horizontal-stretch: max(0.05, p.share);
+        border-radius: 4px;
+        background: root.tint.transparentize(0.25);
+    }
+}
+
+component RecipeTile inherits Rectangle {
+    in property <RecipeCard> recipe;
+    callback open();
+    // Short tiles drop the note, then the pour profile.
+    property <bool> roomy: self.height >= 330px;
+    property <bool> tight: self.height < 260px;
+    background: ta.pressed ? Theme.surface-2 : Theme.surface;
+    border-radius: Theme.r-card;
+    border-width: 1px;
+    border-color: Theme.border;
+    animate background { duration: 120ms; }
+
+    band := Rectangle {
+        x: 0;
+        y: 0;
+        height: root.tight ? 72px : Layout.compact || root.height < 300px ? 92px : 112px;
+        border-top-left-radius: Theme.r-card;
+        border-top-right-radius: Theme.r-card;
+        background: root.recipe.tint;
+        // Soft decorative rings, clipped to the band (kept clear of the rounded corners:
+        // the software renderer clips rectangles, not radii).
+        Rectangle {
+            x: 0;
+            y: Theme.r-card;
+            width: parent.width;
+            height: parent.height - Theme.r-card;
+            clip: true;
+            Rectangle {
+                x: parent.width - 118px;
+                y: -6px;
+                width: 150px;
+                height: 150px;
+                border-radius: 75px;
+                background: #ffffff1a;
+            }
+            Rectangle {
+                x: parent.width - 60px;
+                y: 34px;
+                width: 84px;
+                height: 84px;
+                border-radius: 42px;
+                background: #ffffff14;
+            }
+        }
+        Rectangle {
+            x: root.tight ? 12px : 16px;
+            y: root.tight ? 10px : 16px;
+            width: root.tight ? 30px : 40px;
+            height: self.width;
+            border-radius: self.width / 2;
+            background: #ffffff33;
+            Icon {
+                source: root.recipe.kind == "iced" ? Icons.snowflake : root.recipe.kind == "no-grind" ? Icons.bean : Icons.droplet;
+                tint: #ffffff;
+                width: root.tight ? 16px : 20px;
+                height: self.width;
+            }
+        }
+        if root.recipe.favorite: Icon {
+            x: parent.width - self.width - (root.tight ? 12px : 18px);
+            y: root.tight ? 14px : 18px;
+            source: Icons.star;
+            tint: #ffffff;
+            width: 20px;
+            height: 20px;
+        }
+        Text {
+            x: root.tight ? 12px : 16px;
+            y: parent.height - self.height - (root.tight ? 8px : 14px);
+            text: root.recipe.dose + " g · " + root.recipe.ratio;
+            color: #ffffff;
+            font-size: Theme.fs-title;
+            font-weight: 700;
+        }
+    }
+
+    VerticalLayout {
+        y: band.height;
+        height: parent.height - band.height;
+        padding: Layout.compact ? 12px : 16px;
+        padding-top: root.tight ? 8px : 14px;
+        spacing: root.tight ? 3px : 6px;
+        Text {
+            text: root.recipe.name;
+            color: Theme.text;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            wrap: root.tight ? no-wrap : word-wrap;
+            max-height: root.tight ? 26px : 52px;
+            overflow: elide;
+        }
+        Text {
+            text: root.recipe.subtitle;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            overflow: elide;
+        }
+        if root.recipe.note != "" && root.roomy: Text {
+            text: root.recipe.note;
+            color: Theme.text-3;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+            max-height: 48px;
+            overflow: elide;
+        }
+        Rectangle { vertical-stretch: 1; }
+        if !root.tight: Text {
+            text: root.recipe.pours.length + " pours · " + root.recipe.temp;
+            color: Theme.text-2;
+            font-size: Theme.fs-caption;
+            font-weight: 600;
+        }
+        if !root.tight: PourProfile { pours: root.recipe.pours; tint: root.recipe.tint; }
+        if !root.tight: Rectangle { height: 4px; }
+        HorizontalLayout {
+            spacing: 14px;
+            MiniStat { label: "Grind"; value: root.recipe.grind; }
+            MiniStat { label: "Water"; value: root.recipe.water + " ml"; }
+            MiniStat { label: "Time"; value: root.recipe.time; }
+        }
+    }
+
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.open();
+        }
+    }
+}
+
+export component HomePage inherits Rectangle {
+    property <bool> brewing: AppState.brew.active && !AppState.brew.finished;
+    property <length> banner-h: brewing ? (Layout.compact ? 48px : 56px) : 0px;
+    // Height left for tiles below the header (and the brewing banner).
+    property <length> avail-h: Layout.content-height - banner-h - 6px - Layout.pad-bottom;
+    // A grid when two rows of tiles fit; otherwise one scrolling row.
+    property <bool> grid: Layout.portrait || avail-h >= 2 * 230px + Layout.gap;
+    property <length> min-tile: Layout.compact ? 190px : 210px;
+    property <int> count: AppState.recipes.length;
+    property <int> cols: grid ? max(1, floor((Layout.inner-width + Layout.gap) / (min-tile + Layout.gap))) : max(1, count);
+    property <int> rows: grid ? ceil(count / cols) : 1;
+    property <length> tile-w: grid ? (Layout.inner-width - (cols - 1) * Layout.gap) / cols : Layout.compact ? 200px : 236px;
+    property <length> tile-h: grid ? clamp((avail-h - Layout.gap) / 2, 230px, 300px) : max(180px, avail-h);
+
+    VerticalLayout {
+        Header {
+            title: AppState.greeting;
+            subtitle: AppState.date + "  ·  " + AppState.recipes.length + (AppState.recipes.length == 1 ? " recipe" : " recipes");
+        }
+        if root.brewing: Rectangle {
+            height: root.banner-h;
+            HorizontalLayout {
+                padding-left: Layout.pad-left;
+                padding-right: Layout.pad-right;
+                padding-bottom: Layout.compact ? 6px : 0px;
+                banner := Rectangle {
+                    border-radius: 16px;
+                    background: ta.pressed ? Theme.accent.darker(0.1) : Theme.accent;
+                    HorizontalLayout {
+                        padding-left: 18px;
+                        padding-right: 18px;
+                        spacing: 10px;
+                        Icon { y: (parent.height - self.height) / 2; source: Icons.coffee; tint: Theme.accent-ink; }
+                        Text {
+                            text: "Brewing " + AppState.brew.recipe + " — " + AppState.brew.message;
+                            color: Theme.accent-ink;
+                            font-size: Theme.fs-body;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        Icon { y: (parent.height - self.height) / 2; source: Icons.next; tint: Theme.accent-ink; }
+                    }
+                    ta := TouchArea { clicked => { AppState.navigate(Page.brewing); } }
+                }
+            }
+        }
+        if AppState.recipes.length == 0: Rectangle {
+            vertical-stretch: 1;
+            Card {
+                width: min(460px, Layout.inner-width);
+                height: min(210px, parent.height - 16px);
+                VerticalLayout {
+                    padding: Layout.compact ? 16px : 28px;
+                    spacing: 10px;
+                    alignment: center;
+                    Icon { x: (parent.width - self.width) / 2; source: Icons.coffee; tint: Theme.accent; width: 40px; height: 40px; }
+                    Text {
+                        text: "No recipes yet";
+                        color: Theme.text;
+                        font-size: Theme.fs-h2;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Add recipes from the admin panel on your phone:\n" + AppState.admin-url;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-small;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+        if AppState.recipes.length > 0: Flickable {
+            vertical-stretch: 1;
+            content-width: max(self.width, Layout.pad-left + root.cols * root.tile-w + (root.cols - 1) * Layout.gap + Layout.pad-right);
+            content-height: max(self.height, 6px + root.rows * root.tile-h + (root.rows - 1) * Layout.gap + Layout.pad-bottom);
+            interactive: true;
+            flicked => { AppState.activity(); }
+            for r[i] in AppState.recipes: RecipeTile {
+                x: Layout.pad-left + mod(i, root.cols) * (root.tile-w + Layout.gap);
+                y: 6px + floor(i / root.cols) * (root.tile-h + Layout.gap);
+                width: root.tile-w;
+                height: root.tile-h;
+                recipe: r;
+                open => { AppState.open-recipe(r.id); }
+            }
+        }
+    }
+}

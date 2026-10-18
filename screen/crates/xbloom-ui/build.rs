@@ -1,0 +1,27 @@
+//! Compile the Slint UI.
+//!
+//! Hosted builds load fonts and images from embedded files at runtime. MCU builds (the
+//! ESP32-S3) pre-render everything for the software renderer at compile time; fonts become
+//! signed-distance fields — one glyph set per weight that scales to every size — instead of a
+//! bitmap per size, which keeps five weights of Inter in about a megabyte of flash.
+fn main() {
+    let mcu = std::env::var_os("CARGO_FEATURE_MCU").is_some();
+    let config = if mcu {
+        // Slint renders SDF glyphs at 2/3 of the largest listed size (capped at 6× the
+        // smallest). Font sizes come from the Theme global, which the compiler doesn't count,
+        // so list a range: 12…72 px gives 48 px glyphs — crisp from captions up to the 120 px
+        // clock, at ~150 KB per weight.
+        std::env::set_var("SLINT_FONT_SIZES", "12,72");
+        slint_build::CompilerConfiguration::new()
+            .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer)
+            .with_sdf_fonts(true)
+    } else {
+        // Debug builds keep element ids and names, so the tests can find elements on screen
+        // (tests/fit.rs).
+        let debug = std::env::var("PROFILE").as_deref() == Ok("debug");
+        slint_build::CompilerConfiguration::new()
+            .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles)
+            .with_debug_info(debug)
+    };
+    slint_build::compile_with_config("ui/app.slint", config).expect("compile the Slint UI");
+}

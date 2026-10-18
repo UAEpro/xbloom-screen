@@ -50,6 +50,26 @@ The library is developed and tested on **Linux (BlueZ)**. `bleak` also supports 
       — e.g. surface "bloom / pour 1 / pour 2 / drain" from the `0x3e` pour counter.
 - [ ] Captures/decodes for **other firmware versions** (this targets `V12.0D.500`).
 
+## xBloom Screen (touchscreen controller)
+
+[`screen/`](screen/README.md): a Rust + Slint controller for a Raspberry Pi or an ESP32-S3,
+with a web admin panel.
+
+- [x] Recipe library, live brew view, history, dial presets, PIN lock, screensaver, setup
+      wizard and demo mode; the admin panel for phones.
+- [x] Raspberry Pi build (DRM/KMS kiosk, BlueZ, installer) and ESP32-S3 firmware, both
+      built in CI and published as `screen-latest` / `screen-vX.Y.Z` releases.
+- [x] Layout for any panel from 480 × 272 up, landscape or portrait; interface-size and
+      rotation settings.
+- [ ] **Run the ESP32-S3 firmware on real hardware** (Sunton ESP32-8048S043C) and correct
+      the pin map / panel timings as needed — it is built but untested.
+- [ ] Try **rotation** on a real side-mounted Pi panel (touch calibration).
+- [ ] More ESP32-S3 boards (one `Board` entry each in `firmware/esp32s3/src/board.rs`).
+- [ ] A headless build for the classic ESP32 (ESP-WROOM-32): Bluetooth + the admin panel,
+      no touchscreen. The touchscreen build needs the ESP32-S3's PSRAM and RGB LCD
+      controller, which the classic ESP32 doesn't have.
+- [ ] A 320 × 240 layout, for small SPI-screen boards.
+
 ## Nice-to-haves
 
 - [ ] Home Assistant / ESPHome integration built on the pure `protocol`/`client` layers.

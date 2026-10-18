@@ -1,0 +1,23 @@
+[package]
+name = "xbloom-core"
+description = "Byte-exact xBloom Studio BLE protocol, telemetry decoder, recipe model and brew monitor — no_std, shared by the Raspberry Pi and ESP32 screens."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["std"]
+# `std` adds the blocking machine driver (`driver`) and the byte-level simulator (`sim`),
+# which need threads and a clock. The protocol / telemetry / recipe / brew modules are
+# `no_std + alloc` and work on bare-metal targets too.
+std = ["serde/std", "dep:log"]
+
+[dependencies]
+serde = { workspace = true }
+libm = "0.2"
+log = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

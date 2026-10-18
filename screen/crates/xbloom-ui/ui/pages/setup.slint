@@ -1,0 +1,260 @@
+// First-run setup: welcome → admin PIN → pair the machine (or demo mode) → admin panel.
+// Each step puts its text beside its control in landscape and above it when stacked.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, LinkState } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, PinPad, Chip } from "../widgets.slint";
+import { Logo } from "../chrome.slint";
+
+component Steps inherits HorizontalLayout {
+    in property <int> step;
+    spacing: 8px;
+    alignment: center;
+    for i in 4: Rectangle {
+        width: i == root.step ? 28px : 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: i <= root.step ? Theme.accent : Theme.surface-3;
+        animate width { duration: 200ms; }
+    }
+}
+
+component PinText inherits VerticalLayout {
+    in property <bool> centered;
+    alignment: center;
+    spacing: Layout.short ? 6px : 10px;
+    if !Layout.short && !(Layout.stack && Layout.compact): Icon { x: root.centered ? (parent.width - self.width) / 2 : 0; source: Icons.shield; tint: Theme.accent; width: 44px; height: 44px; }
+    Text { text: AppState.pin-title; color: Theme.text; font-size: Theme.fs-title; font-weight: 700; wrap: word-wrap; horizontal-alignment: root.centered ? center : left; }
+    Text { text: AppState.pin-subtitle; color: Theme.text-2; font-size: Layout.short ? Theme.fs-small : Theme.fs-body; wrap: word-wrap; horizontal-alignment: root.centered ? center : left; }
+}
+
+component MachineText inherits VerticalLayout {
+    alignment: center;
+    spacing: Layout.short ? 6px : 10px;
+    if !Layout.short: Icon { source: Icons.bluetooth; tint: Theme.accent; width: 44px; height: 44px; }
+    Text { text: "Connect your xBloom"; color: Theme.text; font-size: Theme.fs-title; font-weight: 700; wrap: word-wrap; }
+    Text {
+        text: "Switch the machine on and close the xBloom phone app — the machine accepts one Bluetooth connection at a time.";
+        color: Theme.text-2;
+        font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+        wrap: word-wrap;
+    }
+    if !Layout.short: Rectangle { height: 6px; }
+    HorizontalLayout {
+        spacing: 8px;
+        Button {
+            horizontal-stretch: 1;
+            min-height: Layout.compact ? 44px : 52px;
+            pad-x: Layout.compact ? 12px : 22px;
+            text: AppState.scanning ? "Scanning…" : "Scan again";
+            kind: ButtonKind.secondary;
+            has-icon: !Layout.short;
+            icon: Icons.refresh;
+            enabled: !AppState.scanning;
+            clicked => { AppState.scan(); }
+        }
+    }
+    Button {
+        min-height: Layout.compact ? 40px : 52px;
+        text: Layout.compact ? "Try demo mode" : "No machine? Try demo mode";
+        kind: ButtonKind.ghost;
+        clicked => { AppState.setup-demo(); }
+    }
+}
+
+component MachineList inherits Card {
+    VerticalLayout {
+        padding: Layout.compact ? 10px : 16px;
+        spacing: 8px;
+        if AppState.link == LinkState.connected: VerticalLayout {
+            spacing: 10px;
+            padding-bottom: 6px;
+            HorizontalLayout {
+                spacing: 10px;
+                Icon { y: (parent.height - self.height) / 2; source: Icons.check-circle; tint: Theme.success; width: 26px; height: 26px; }
+                Text {
+                    text: "Connected to " + AppState.machine-name;
+                    color: Theme.text;
+                    font-size: Theme.fs-h2;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+            }
+            Button { text: "Continue"; has-icon: true; icon: Icons.next; clicked => { AppState.setup-step = 3; } }
+        }
+        if AppState.scan-results.length == 0 && AppState.link != LinkState.connected: Text {
+            text: AppState.scanning ? "Looking for machines nearby…" : "No machines found yet.";
+            color: Theme.text-3;
+            font-size: Theme.fs-body;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            vertical-stretch: 1;
+            wrap: word-wrap;
+        }
+        for d in AppState.link == LinkState.connected ? [] : AppState.scan-results: Rectangle {
+            height: Layout.compact ? 52px : 60px;
+            border-radius: 14px;
+            background: ta.pressed ? Theme.surface-3 : Theme.surface-2;
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                Icon { y: (parent.height - self.height) / 2; source: Icons.coffee; tint: Theme.accent; }
+                Text { text: d.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                Text { text: AppState.link == LinkState.connecting ? "Connecting…" : "Connect"; color: Theme.accent-strong; font-size: Theme.fs-small; font-weight: 700; vertical-alignment: center; }
+            }
+            ta := TouchArea { clicked => { AppState.pair(d.address); } }
+        }
+        Rectangle { vertical-stretch: 1; }
+    }
+}
+
+component DoneText inherits VerticalLayout {
+    alignment: center;
+    spacing: Layout.short ? 8px : 12px;
+    if !Layout.compact: Icon { source: Icons.sparkles; tint: Theme.accent; width: 44px; height: 44px; }
+    Text { text: "You're all set"; color: Theme.text; font-size: Theme.fs-hero; font-weight: 700; wrap: word-wrap; }
+    Text {
+        text: "Manage recipes, screensaver videos and the lock from your phone: scan the code, then sign in with your admin PIN.";
+        color: Theme.text-2;
+        font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: start;
+        Chip { has-icon: true; icon: Icons.wifi; text: AppState.admin-url; fill: Theme.accent-soft; fg: Theme.accent-strong; }
+    }
+    if AppState.admin-hint != "": Text { text: AppState.admin-hint; color: Theme.text-2; font-size: Theme.fs-small; wrap: word-wrap; }
+}
+
+component SetupQr inherits Rectangle {
+    in property <length> size: 220px;
+    width: size;
+    height: size;
+    border-radius: 20px;
+    background: #ffffff;
+    Image { width: root.size - 24px; height: root.size - 24px; source: AppState.admin-qr; image-rendering: pixelated; }
+}
+
+export component SetupPage inherits Rectangle {
+    background: Theme.bg;
+    property <length> pad: Layout.short ? 12px : Layout.compact ? 16px : 28px;
+    // Width of the area inside the page padding.
+    property <length> avail: self.width - 2 * pad;
+    property <length> pinpad-w: 3 * Layout.key-width + 2 * (Layout.key-height < 52px ? 6px : 10px);
+    property <length> qr: Layout.compact ? min(150px, avail / 2.4) : 220px;
+    VerticalLayout {
+        padding: root.pad;
+        spacing: Layout.short ? 8px : 16px;
+        Steps { step: AppState.setup-step; }
+
+        // 0 — welcome
+        if AppState.setup-step == 0: Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+                alignment: center;
+                VerticalLayout {
+                    width: min(420px, root.avail);
+                    alignment: center;
+                    spacing: Layout.short ? 8px : 14px;
+                    Logo { size: Layout.short ? 48px : Layout.compact ? 56px : 72px; }
+                    Text {
+                        text: "Welcome to your xBloom screen";
+                        color: Theme.text;
+                        font-size: Theme.fs-hero;
+                        font-weight: 700;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: "Pick a recipe, hold to brew, and watch every pour live. Let's set an admin PIN and connect your machine — it takes a minute.";
+                        color: Theme.text-2;
+                        font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+                        wrap: word-wrap;
+                    }
+                    if !Layout.short: Rectangle { height: 8px; }
+                    Button {
+                        min-height: Layout.compact ? 46px : 52px;
+                        text: "Get started";
+                        has-icon: true;
+                        icon: Icons.next;
+                        clicked => { AppState.setup-start(); }
+                    }
+                }
+            }
+        }
+
+        // 1 — admin PIN (the PIN flow lives in Rust; this shows the pad)
+        if AppState.setup-step == 1 && !Layout.stack: HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: Layout.compact ? 16px : 36px;
+            alignment: center;
+            PinText { width: min(320px, root.avail - root.pinpad-w - 16px); }
+            PinPad { error: AppState.pin-error; length: AppState.pin-length; }
+        }
+        if AppState.setup-step == 1 && Layout.stack: VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 12px;
+            alignment: center;
+            PinText { centered: true; }
+            PinPad { error: AppState.pin-error; length: AppState.pin-length; }
+        }
+
+        // 2 — machine
+        if AppState.setup-step == 2 && !Layout.stack: HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: Layout.compact ? 14px : 28px;
+            MachineText { width: Layout.compact ? 210px : 300px; }
+            MachineList { horizontal-stretch: 1; }
+        }
+        if AppState.setup-step == 2 && Layout.stack: VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 12px;
+            MachineText {}
+            MachineList { vertical-stretch: 1; min-height: 120px; }
+        }
+
+        // 3 — done. The text scrolls if it must; the button stays on screen.
+        if AppState.setup-step == 3: VerticalLayout {
+            vertical-stretch: 1;
+            spacing: Layout.short ? 8px : 12px;
+            if !Layout.stack: HorizontalLayout {
+                vertical-stretch: 1;
+                spacing: Layout.compact ? 16px : 32px;
+                alignment: center;
+                Flickable {
+                    width: min(380px, root.avail - root.qr - 16px);
+                    content-width: self.width;
+                    content-height: max(self.height, side.preferred-height);
+                    side := DoneText { width: min(380px, root.avail - root.qr - 16px); }
+                }
+                SetupQr { y: (parent.height - self.height) / 2; size: root.qr; }
+            }
+            if Layout.stack: Flickable {
+                vertical-stretch: 1;
+                content-width: self.width;
+                content-height: max(self.height, done.preferred-height);
+                done := VerticalLayout {
+                    width: parent.width;
+                    spacing: 14px;
+                    alignment: center;
+                    SetupQr { x: (parent.width - self.width) / 2; size: Layout.compact ? 150px : 200px; }
+                    DoneText { width: root.avail; }
+                }
+            }
+            HorizontalLayout {
+                alignment: center;
+                Button {
+                    width: Layout.stack ? root.avail : min(root.avail, 380px + root.qr + 32px);
+                    min-height: Layout.compact ? 46px : 52px;
+                    text: "Start brewing";
+                    has-icon: true;
+                    icon: Icons.coffee;
+                    clicked => { AppState.setup-finish(); }
+                }
+            }
+        }
+    }
+}

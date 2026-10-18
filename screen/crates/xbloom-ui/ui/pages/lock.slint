@@ -1,0 +1,147 @@
+// The lock screen, the screensaver (clock / video / photos) and sleep.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons } from "../state.slint";
+import { Icon, PinPad, Chip } from "../widgets.slint";
+import { Logo } from "../chrome.slint";
+
+export component LockScreen inherits Rectangle {
+    background: Theme.bg;
+    property <length> pad: Layout.short ? 16px : 36px;
+    // Landscape: the clock gets the width the keypad leaves ("12:45" is about 2.6 em wide).
+    property <length> keypad-w: 3 * Layout.key-width + 2 * (Layout.key-height < 52px ? 6px : 10px);
+    property <length> clock-size: min(Theme.fs-clock, (self.width - keypad-w - 2 * pad - 24px) / 2.8);
+    TouchArea {}
+    // Landscape: the clock beside the keypad. Stacked: the clock above it, smaller.
+    if !Layout.stack: HorizontalLayout {
+        padding: root.pad;
+        spacing: 24px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 8px;
+            if !Layout.short: Logo { size: 56px; }
+            if !Layout.short: Rectangle { height: 14px; }
+            Text {
+                text: AppState.time;
+                color: Theme.text;
+                font-size: root.clock-size;
+                font-weight: 300;
+            }
+            Text {
+                text: AppState.date;
+                color: Theme.text-2;
+                font-size: Theme.fs-h2;
+                font-weight: 500;
+                wrap: word-wrap;
+            }
+            Rectangle { height: Layout.short ? 4px : 10px; }
+            HorizontalLayout {
+                alignment: start;
+                Chip { has-icon: true; icon: Icons.lock; text: Layout.short ? "Locked" : "Locked — enter the PIN"; }
+            }
+        }
+        PinPad {
+            error: AppState.pin-error;
+            length: AppState.pin-length;
+        }
+    }
+    if Layout.stack: VerticalLayout {
+        padding: 16px;
+        spacing: 8px;
+        alignment: center;
+        Text {
+            text: AppState.time;
+            color: Theme.text;
+            font-size: Layout.compact ? 64px : Theme.fs-clock;
+            font-weight: 300;
+            horizontal-alignment: center;
+        }
+        HorizontalLayout {
+            alignment: center;
+            Chip { has-icon: true; icon: Icons.lock; text: AppState.date; }
+        }
+        Rectangle { height: 8px; }
+        PinPad {
+            error: AppState.pin-error;
+            length: AppState.pin-length;
+        }
+    }
+}
+
+export component Screensaver inherits Rectangle {
+    background: AppState.saver-has-frame ? #000000 : Theme.bg;
+
+    // Burn-in protection: the clock drifts to a new spot every minute.
+    property <int> spot: 0;
+    Timer {
+        interval: 60s;
+        running: true;
+        triggered => { root.spot = mod(root.spot + 1, 4); }
+    }
+
+    if AppState.saver-has-frame: Image {
+        width: 100%;
+        height: 100%;
+        source: AppState.saver-frame;
+        image-fit: cover;
+    }
+
+    // Clock mode: big clock over a slow glow.
+    if !AppState.saver-has-frame: Rectangle {
+        glow := Rectangle {
+            // Sized to the screen (520 px at 800 × 480); k scales the drift offsets with it.
+            property <float> k: self.width / 520px;
+            width: min(root.width, root.height) * 1.08;
+            height: self.width;
+            x: root.spot == 0 ? -120px * k : root.spot == 1 ? parent.width - 420px * k : root.spot == 2 ? parent.width - 460px * k : -80px * k;
+            y: root.spot == 0 ? -160px * k : root.spot == 1 ? -120px * k : root.spot == 2 ? parent.height - 380px * k : parent.height - 400px * k;
+            animate x, y { duration: 20s; easing: ease-in-out; }
+            border-radius: self.width / 2;
+            background: @radial-gradient(circle, Theme.accent.transparentize(0.72) 0%, Theme.accent.transparentize(1) 70%);
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 4px;
+            x: root.spot == 1 || root.spot == 2 ? 18px : -18px;
+            animate x { duration: 20s; easing: ease-in-out; }
+            Text {
+                text: AppState.time;
+                color: Theme.text;
+                font-size: Theme.fs-clock;
+                font-weight: 300;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: AppState.date;
+                color: Theme.text-2;
+                font-size: Theme.fs-h2;
+                font-weight: 500;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // Clock overlay on video / photos.
+    if AppState.saver-has-frame && AppState.saver-clock-overlay: Rectangle {
+        y: parent.height - self.height;
+        height: Layout.compact ? 110px : 150px;
+        background: @linear-gradient(180deg, #00000000 0%, #0000009a 100%);
+        VerticalLayout {
+            padding-left: Layout.compact ? 18px : 32px;
+            padding-bottom: Layout.compact ? 14px : 22px;
+            alignment: end;
+            spacing: 0px;
+            Text { text: AppState.time; color: #ffffff; font-size: Theme.fs-display; font-weight: 300; }
+            Text { text: AppState.date; color: #ffffffcc; font-size: Theme.fs-body; font-weight: 500; }
+        }
+    }
+
+    TouchArea { clicked => { AppState.wake(); } }
+}
+
+export component Sleep inherits Rectangle {
+    background: #000000;
+    TouchArea { clicked => { AppState.wake(); } }
+}

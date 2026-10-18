@@ -1,0 +1,32 @@
+[package]
+name = "xbloom-screen"
+description = "The xBloom touchscreen controller for Raspberry Pi (and any Linux box): BLE via BlueZ, Slint UI on DRM/KMS or a desktop window, and the admin web panel."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["backend-linuxkms", "backend-winit"]
+# The touch hook that rotates touchscreens uses Slint's libinput API ("09" is its historical
+# name; it is the input 0.10 crate Slint itself links).
+backend-linuxkms = ["xbloom-ui/backend-linuxkms", "slint/unstable-libinput-09", "dep:input"]
+backend-winit = ["xbloom-ui/backend-winit"]
+gpu = ["xbloom-ui/gpu"]
+
+[dependencies]
+xbloom-core = { workspace = true, features = ["std"] }
+xbloom-app = { workspace = true }
+xbloom-ui = { workspace = true }
+slint = { version = "1.18", default-features = false, features = ["compat-1-2", "std"] }
+btleplug = "0.13"
+futures = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
+tiny_http = "0.12"
+libc = "0.2"
+log = { workspace = true }
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+input = { version = "0.10", default-features = false, optional = true }

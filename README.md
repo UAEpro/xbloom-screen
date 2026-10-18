@@ -29,6 +29,14 @@ It is a small, dependency-light Python package (`bleak` + `pyyaml`; the cloud
 feature adds an optional `cryptography` dep) with a clean CLI and a fully
 documented protocol so others can build on it.
 
+> 📟 **Want a touchscreen next to the machine?** **[xBloom Screen](screen/README.md)** is a
+> standalone controller for a **Raspberry Pi with a touchscreen** (any size from 480 × 272,
+> landscape or portrait) or an **ESP32-S3 touch display** (experimental). It has a recipe
+> library, live brew view, dial presets, a PIN lock, a video screensaver and a web admin
+> panel for your phone. It is written in Rust and Slint, and uses the same protocol with
+> the same load-only safety model. Builds are on the
+> [releases page](https://github.com/uaepro/xbloom-screen/releases).
+
 > 🤖 **Designed with agentic use in mind.** This was written *by* an AI coding agent
 > ([Claude Code](https://claude.com/claude-code)) and tailored to be driven *by* one —
 > scriptable commands, predictable/parseable output, a fully documented protocol, and a
@@ -725,6 +733,10 @@ The protocol tests assert this package's frames are **byte-for-byte** identical
 to the reverse-engineering reference, including the 127-ml split, the center and
 ring patterns, and an agitated bloom. Point `XBLOOM_REFERENCE` at the reference
 script if it lives elsewhere (those comparison tests skip if it's absent).
+
+The touchscreen controller in [`screen/`](screen/README.md#development) is a Rust port of
+this protocol. After changing the protocol, recipe validation or telemetry here, run
+`python3 screen/tools/gen_golden.py` so its golden vectors match again (CI checks them).
 
 ---
 

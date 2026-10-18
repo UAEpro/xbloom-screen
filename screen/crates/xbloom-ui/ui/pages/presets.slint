@@ -1,0 +1,221 @@
+// The machine's A · B · C dial presets: assign three recipes and push them over Bluetooth,
+// then brew straight from the machine's dial with no phone. Three cards on regular screens,
+// three rows on small or portrait ones.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, SlotRow, Overlay } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, Toggle, SectionTitle } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component SlotCard inherits Rectangle {
+    in property <SlotRow> slot;
+    in property <int> index;
+    background: Theme.surface;
+    border-radius: Theme.r-card;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                width: 52px;
+                height: 52px;
+                border-radius: 26px;
+                background: root.slot.recipe-id != "" ? Theme.accent : Theme.surface-2;
+                Text {
+                    text: root.slot.slot;
+                    color: root.slot.recipe-id != "" ? Theme.accent-ink : Theme.text-3;
+                    font-size: Theme.fs-title;
+                    font-weight: 700;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                SectionTitle { text: "SLOT " + root.slot.slot; }
+            }
+        }
+        Text {
+            text: root.slot.recipe-id != "" ? root.slot.recipe : "Not assigned";
+            color: root.slot.recipe-id != "" ? Theme.text : Theme.text-3;
+            font-size: Theme.fs-h2;
+            font-weight: 700;
+            wrap: word-wrap;
+            max-height: 52px;
+            overflow: elide;
+        }
+        Text {
+            text: root.slot.detail;
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            overflow: elide;
+        }
+        Rectangle { vertical-stretch: 1; }
+        HorizontalLayout {
+            spacing: 10px;
+            Text {
+                text: "Scale";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Toggle {
+                checked: root.slot.scale;
+                toggled(v) => { AppState.set-slot-scale(root.index, v); }
+            }
+        }
+        Button {
+            text: root.slot.recipe-id != "" ? "Change" : "Choose recipe";
+            kind: ButtonKind.secondary;
+            clicked => {
+                AppState.picking-slot = root.index;
+                AppState.overlay = Overlay.pick-recipe;
+            }
+        }
+    }
+}
+
+// One slot as a row: letter, recipe, Scale toggle, Change.
+component SlotRowView inherits Rectangle {
+    in property <SlotRow> slot;
+    in property <int> index;
+    // Very narrow rows drop the "Scale" label next to the toggle.
+    property <bool> tight: Layout.inner-width < 360px;
+    height: Layout.compact ? 64px : 76px;
+    background: Theme.surface;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: Theme.border;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 10px;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: root.slot.recipe-id != "" ? Theme.accent : Theme.surface-2;
+            Text {
+                text: root.slot.slot;
+                color: root.slot.recipe-id != "" ? Theme.accent-ink : Theme.text-3;
+                font-size: Theme.fs-h2;
+                font-weight: 700;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.slot.recipe-id != "" ? root.slot.recipe : "Not assigned";
+                color: root.slot.recipe-id != "" ? Theme.text : Theme.text-3;
+                font-size: Theme.fs-body;
+                font-weight: 700;
+                overflow: elide;
+            }
+            if root.slot.detail != "": Text {
+                text: root.slot.detail;
+                color: Theme.text-2;
+                font-size: Theme.fs-caption;
+                overflow: elide;
+            }
+        }
+        if !root.tight: Text {
+            text: "Scale";
+            color: Theme.text-2;
+            font-size: Theme.fs-small;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+        Toggle {
+            y: (parent.height - self.height) / 2;
+            checked: root.slot.scale;
+            toggled(v) => { AppState.set-slot-scale(root.index, v); }
+        }
+        Button {
+            y: (parent.height - self.height) / 2;
+            height: 44px;
+            pad-x: 14px;
+            text: root.slot.recipe-id != "" ? "Change" : "Choose";
+            kind: ButtonKind.secondary;
+            clicked => {
+                AppState.picking-slot = root.index;
+                AppState.overlay = Overlay.pick-recipe;
+            }
+        }
+    }
+}
+
+export component PresetsPage inherits Rectangle {
+    // Cards need height and width; otherwise rows.
+    property <bool> cards: !Layout.stack && !Layout.short && Layout.inner-width >= 560px;
+    VerticalLayout {
+        Header {
+            title: "Dial presets";
+            subtitle: Layout.compact ? "Brew from the machine's A · B · C dial" : "Brew straight from the machine's A · B · C dial — no phone needed";
+        }
+        if root.cards: HorizontalLayout {
+            vertical-stretch: 1;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            spacing: 14px;
+            for s[i] in AppState.slots: SlotCard {
+                horizontal-stretch: 1;
+                slot: s;
+                index: i;
+            }
+        }
+        if !root.cards: Flickable {
+            vertical-stretch: 1;
+            content-width: self.width;
+            content-height: rows.preferred-height;
+            rows := VerticalLayout {
+                width: parent.width;
+                padding-left: Layout.pad-left;
+                padding-right: Layout.pad-right;
+                spacing: 8px;
+                alignment: start;
+                for s[i] in AppState.slots: SlotRowView {
+                    slot: s;
+                    index: i;
+                }
+            }
+        }
+        HorizontalLayout {
+            padding-top: Layout.compact ? 8px : 20px;
+            padding-bottom: Layout.pad-bottom;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            spacing: Layout.compact ? 10px : 14px;
+            height: Layout.compact ? 64px : 92px;
+            if !Layout.short || Layout.inner-width >= 400px: Icon {
+                y: (parent.height - self.height) / 2;
+                source: AppState.slots-dirty ? Icons.info : Icons.check-circle;
+                tint: AppState.slots-dirty ? Theme.warning : Theme.success;
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: AppState.machine-busy != "" ? AppState.machine-busy : AppState.slots-status;
+                color: Theme.text-2;
+                font-size: Layout.compact ? Theme.fs-caption : Theme.fs-small;
+                wrap: word-wrap;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Button {
+                min-height: Layout.compact ? 44px : 52px;
+                pad-x: Layout.compact ? 14px : 22px;
+                text: Layout.inner-width < 360px ? "Save" : "Save to machine";
+                has-icon: true;
+                icon: Icons.bluetooth;
+                enabled: AppState.machine-busy == "";
+                clicked => { AppState.push-presets(); }
+            }
+        }
+    }
+}
