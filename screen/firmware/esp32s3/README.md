@@ -22,13 +22,14 @@ safety model, all from the shared crates in `../../crates`. Installation and usa
 
 ## Boards
 
-| Cargo feature | Board | Image |
+| Cargo feature | Board | Images |
 | --- | --- | --- |
-| `board-sunton-8048s043` (default) | Sunton ESP32-8048S043C, 4.3" | `xbloom-screen-esp32s3-sunton-8048s043c.bin` |
-| `board-waveshare-s3-touch-lcd-7` | Waveshare ESP32-S3-Touch-LCD-7, 7" | `xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin` |
+| `board-sunton-8048s043` (default) | Sunton ESP32-8048S043C, 4.3" | `xbloom-screen-esp32s3-sunton-8048s043c-{16mb,8mb}.bin` |
+| `board-waveshare-s3-touch-lcd-7` | Waveshare ESP32-S3-Touch-LCD-7, 7" | `xbloom-screen-esp32s3-waveshare-touch-lcd-7-{16mb,8mb}.bin` |
 
 Build one with `cargo build --release --no-default-features --features <feature>` (the
-default board needs no flags). CI builds and publishes an image for each.
+default board needs no flags). CI builds each board once and packages it twice, for 16 MB
+(N16R8) and 8 MB (N8R8) modules; see the memory map.
 
 The Waveshare board spends almost every GPIO on the panel, so its backlight enable, panel
 reset and touch reset are pins on a CH422G I/O expander that shares the touch I²C bus
@@ -37,7 +38,12 @@ port keeps working.
 
 ## Memory map
 
-- **Flash (16 MB):** `factory` app 7 MB, `storage` ≈ 8.9 MB (see `partitions.csv`).
+- **Flash, 16 MB:** `factory` app 7 MB, `storage` ≈ 8.9 MB (`partitions.csv`).
+- **Flash, 8 MB:** `factory` app 6 MB, `storage` ≈ 1.9 MB (`partitions-8mb.csv`). The app
+  binary is the same: the flash size is a field in the bootloader header, which
+  `espflash save-image --flash-size` sets, and the app checks it against the chip at boot.
+  The app must stay under 6 MB (it is ~5.4 MB). With the small data partition the admin
+  panel accepts 1 MB uploads and 10 s videos instead of 4 MB and 30 s.
 - **PSRAM (8 MB):** code and constants run from PSRAM (`CONFIG_SPIRAM_XIP_FROM_PSRAM`), about
   5.4 MB. That keeps the display stable while flash is written, and lets thread stacks live
   in PSRAM. The rest holds the two 750 KB frame buffers and ~1.5 MB of heap: screensaver

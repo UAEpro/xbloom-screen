@@ -80,13 +80,20 @@ it needs no X11, Wayland or browser.
 
 ### ESP32-S3 (experimental)
 
-Two boards are supported, each with its own firmware image. Both have an ESP32-S3 with
-16 MB flash and 8 MB PSRAM (N16R8) and run from USB-C, 5 V.
+Two boards are supported, each with its own firmware. Both run from USB-C, 5 V, and need an
+ESP32-S3 module with 8 MB PSRAM and 16 MB or 8 MB flash. The code on the module's metal
+shield says which: **N16R8** (16 MB flash) or **N8R8** (8 MB). Pick the image for both your
+board and that code:
 
-| Board | Screen | Image |
+| Board | Screen | Image (`xbloom-screen-esp32s3-…`) |
 | --- | --- | --- |
-| Sunton **ESP32-8048S043C** | 4.3" 800 × 480 IPS, GT911 capacitive touch, dimmable backlight | `xbloom-screen-esp32s3-sunton-8048s043c.bin` |
-| Waveshare **ESP32-S3-Touch-LCD-7** | 7" 800 × 480, GT911 capacitive touch, backlight on/off only | `xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin` |
+| Sunton **ESP32-8048S043C** | 4.3" 800 × 480 IPS, GT911 capacitive touch, dimmable backlight | `…-sunton-8048s043c-16mb.bin` / `…-8mb.bin` |
+| Waveshare **ESP32-S3-Touch-LCD-7** | 7" 800 × 480, GT911 capacitive touch, backlight on/off only | `…-waveshare-touch-lcd-7-16mb.bin` / `…-8mb.bin` |
+
+With 8 MB of flash the data partition is about 1.9 MB instead of 8.9 MB: plenty for
+recipes, history and photos, and screensaver videos up to 10 s (30 s with 16 MB). An image
+for 16 MB doesn't start on an 8 MB module (the boot log says "Detected size(8192k) smaller
+than the size in the binary image header"); flash the `-8mb` one.
 
 On the Waveshare board the backlight can only be switched on and off, so **Brightness** and
 the screensaver's dimming step have no effect; the screen still turns off when it sleeps.
@@ -99,12 +106,12 @@ entry.
 > RGB-panel ESP32-S3 boards need one board entry in
 > [`firmware/esp32s3/src/board.rs`](firmware/esp32s3/src/board.rs).
 
-On the ESP32, recipes, history and media live on a ~9 MB flash partition. Screensaver
-videos are converted at half resolution (400 × 240, 10 fps, up to 30 s) and scaled up on
-the screen.
+On the ESP32, recipes, history and media live on a flash partition of ~8.9 MB (16 MB
+flash) or ~1.9 MB (8 MB). Screensaver videos are converted at half resolution (400 × 240,
+10 fps, up to 30 s, or 10 s with 8 MB flash) and scaled up on the screen.
 
-**Other ESP32 boards.** The firmware needs an ESP32-**S3** with 8 MB PSRAM, 16 MB flash and
-a parallel-RGB panel. The classic ESP32 (ESP-WROOM-32 modules, "Cheap Yellow Display"
+**Other ESP32 boards.** The firmware needs an ESP32-**S3** with 8 MB PSRAM, 8 or 16 MB flash
+and a parallel-RGB panel. The classic ESP32 (ESP-WROOM-32 modules, "Cheap Yellow Display"
 boards) has no PSRAM and no RGB LCD controller, and usually 4 MB of flash, less than the
 firmware image alone. It is not supported (see the [roadmap](../ROADMAP.md) for a possible
 headless build).
@@ -170,15 +177,16 @@ Logs: `journalctl -u xbloom-screen -f`.
 
 ### ESP32-S3
 
-1. Download the image for your board (see the [table above](#esp32-s3-experimental)) from a
+1. Download the image for your board and flash size (see the
+   [table above](#esp32-s3-experimental)) from a
    [release](https://github.com/uaepro/xbloom-screen/releases) (or the
    [latest build of `main`](https://github.com/uaepro/xbloom-screen/releases/tag/screen-latest)).
-   The images aren't interchangeable: each one drives its own board's pins.
+   The boards' images aren't interchangeable: each one drives its own board's pins.
 2. Flash it **at address 0x0**. It's a merged image with the bootloader, partition table
    and app. You can use [Espressif's web flasher](https://espressif.github.io/esptool-js/)
    in Chrome/Edge, or from a terminal:
    ```bash
-   espflash write-bin 0x0 xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin
+   espflash write-bin 0x0 xbloom-screen-esp32s3-waveshare-touch-lcd-7-8mb.bin
    ```
    The image ends before the data partition, so flashing an update keeps your recipes,
    history and settings. Don't tick "erase flash" unless you want a factory reset. If the
@@ -304,6 +312,7 @@ cd screen/firmware/esp32s3
 cargo build --release    # Sunton ESP32-8048S043C, the default board
 # or: cargo build --release --no-default-features --features board-waveshare-s3-touch-lcd-7
 espflash flash --monitor target/xtensa-esp32s3-espidf/release/xbloom-screen-esp32s3
+# 8 MB flash: add --flash-size 8mb --partition-table partitions-8mb.csv
 ```
 
 **Releases.** CI checks and builds both targets on every pull request and push to `main`.

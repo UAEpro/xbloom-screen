@@ -109,15 +109,24 @@ fn main() {
 
     // Wi-Fi (or the setup hotspot), then the app.
     let net = net::Network::start(peripherals.modem, sysloop, nvs, &settings.wifi, data, 80).expect("wifi");
+    // The data partition is ~8.9 MB with 16 MB flash and ~1.9 MB with 8 MB (partitions-8mb.csv):
+    // keep screensaver videos to what fits.
+    let small_flash = storage::usage().is_some_and(|(_, total)| total < 4 << 20);
     let info = PlatformInfo {
         name: "esp32s3".into(),
         screen: size,
         // Half-resolution video: the JPEG decoder keeps ~10 fps, and the screen scales it up.
-        video: VideoProfile { width: size.0 / 2, height: size.1 / 2, fps: 10, quality: 0.7, max_seconds: 30 },
+        video: VideoProfile {
+            width: size.0 / 2,
+            height: size.1 / 2,
+            fps: 10,
+            quality: 0.7,
+            max_seconds: if small_flash { 10 } else { 30 },
+        },
         pin_iterations: 10_000,
         history_max: 200,
         history_points: 160,
-        max_upload: 4_000_000,
+        max_upload: if small_flash { 1_000_000 } else { 4_000_000 },
         version: env!("CARGO_PKG_VERSION").into(),
         can_rotate: true,
     };

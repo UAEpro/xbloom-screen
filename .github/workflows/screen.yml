@@ -129,19 +129,24 @@ jobs:
           key: ${{ matrix.board }}
       - run: cargo build --release --locked --no-default-features --features ${{ matrix.feature }}
       # Bootloader + partition table + app in one file to write at 0x0. Unpadded, so flashing
-      # an update stops before the data partition and keeps recipes and settings.
-      - name: Flashable image
+      # an update stops before the data partition and keeps recipes and settings. The same app
+      # is packaged for 16 MB (N16R8) and 8 MB (N8R8) modules: the flash size lives in the
+      # bootloader header, and each size has its own partition table (espflash fails the step
+      # if the app outgrows its slot).
+      - name: Flashable images
         run: |
           OUT=target/xtensa-esp32s3-espidf/release
-          IMAGE=xbloom-screen-esp32s3-${{ matrix.board }}.bin
-          espflash save-image --chip esp32s3 --merge --skip-padding --flash-size 16mb \
-            --bootloader "$OUT/bootloader.bin" --partition-table partitions.csv \
-            "$OUT/xbloom-screen-esp32s3" "$IMAGE"
-          ls -l "$IMAGE"
+          for v in 16mb:partitions.csv 8mb:partitions-8mb.csv; do
+            IMAGE=xbloom-screen-esp32s3-${{ matrix.board }}-${v%%:*}.bin
+            espflash save-image --chip esp32s3 --merge --skip-padding --flash-size "${v%%:*}" \
+              --bootloader "$OUT/bootloader.bin" --partition-table "${v#*:}" \
+              "$OUT/xbloom-screen-esp32s3" "$IMAGE"
+            ls -l "$IMAGE"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.board }}
-          path: screen/firmware/esp32s3/xbloom-screen-esp32s3-${{ matrix.board }}.bin
+          path: screen/firmware/esp32s3/xbloom-screen-esp32s3-${{ matrix.board }}-*.bin
 
   release:
     name: Publish
@@ -159,13 +164,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          FILES="xbloom-screen-aarch64-linux.tar.gz xbloom-screen-esp32s3-sunton-8048s043c.bin
-            xbloom-screen-esp32s3-waveshare-touch-lcd-7.bin"
+          # The Pi build and one ESP32-S3 image per board and flash size.
+          FILES=(xbloom-screen-aarch64-linux.tar.gz xbloom-screen-esp32s3-*.bin)
+          ls -l "${FILES[@]}"
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            gh release create "$GITHUB_REF_NAME" $FILES --title "xBloom Screen ${GITHUB_REF_NAME#screen-}" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "${FILES[@]}" --title "xBloom Screen ${GITHUB_REF_NAME#screen-}" --generate-notes
           else
             gh release delete screen-latest --yes --cleanup-tag 2>/dev/null || true
-            gh release create screen-latest $FILES --prerelease --target "$GITHUB_SHA" \
+            gh release create screen-latest "${FILES[@]}" --prerelease --target "$GITHUB_SHA" \
               --title "xBloom Screen (latest main)" \
-              --notes "Rolling build of \`main\` at ${GITHUB_SHA::7}. Raspberry Pi: \`screen/deploy/install.sh\`. ESP32-S3: flash the image for your board (\`…-sunton-8048s043c.bin\` or \`…-waveshare-touch-lcd-7.bin\`) at 0x0."
+              --notes "Rolling build of \`main\` at ${GITHUB_SHA::7}. Raspberry Pi: \`screen/deploy/install.sh\`. ESP32-S3: flash the image for your board and flash size (\`…-16mb.bin\` for N16R8 modules, \`…-8mb.bin\` for N8R8) at 0x0."
           fi
