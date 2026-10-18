@@ -1,0 +1,204 @@
+// Timers: brew at a set time. A timer only says when; each run is armed here, at the
+// machine, after a checklist (beans, filter, cup, water) and the hold gesture, and counts
+// down for a minute with a Cancel button before it brews.
+//
+// Landscape: the next run beside the list. Portrait / square: the next run above it.
+
+import { Theme } from "../theme.slint";
+import { Layout } from "../layout.slint";
+import { AppState, Icons, Overlay, TimerRow } from "../state.slint";
+import { Icon, Card, Button, ButtonKind, Toggle, Stepper, SectionTitle, Chip } from "../widgets.slint";
+import { Header } from "../chrome.slint";
+
+component TimerRowView inherits Rectangle {
+    in property <TimerRow> timer;
+    height: Layout.compact ? 64px : 72px;
+    border-radius: 16px;
+    background: ta.pressed ? Theme.surface-3 : root.timer.next ? Theme.accent-soft : Theme.surface-2;
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            AppState.open-timer(root.timer.id);
+        }
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.timer.time;
+                color: root.timer.enabled ? Theme.text : Theme.text-3;
+                font-size: Theme.fs-title;
+                font-weight: 700;
+            }
+            Text {
+                text: root.timer.days + " · " + root.timer.recipe;
+                color: Theme.text-2;
+                font-size: Theme.fs-caption;
+                overflow: elide;
+            }
+        }
+        Toggle {
+            y: (parent.height - self.height) / 2;
+            checked: root.timer.enabled;
+            toggled(v) => { AppState.set-timer-enabled(root.timer.id, v); }
+        }
+    }
+}
+
+// The next run and its arming.
+component NextCard inherits Card {
+    property <bool> armed: AppState.timer-armed;
+    VerticalLayout {
+        padding: Layout.card-pad;
+        spacing: Layout.compact ? 8px : 12px;
+        SectionTitle { text: "NEXT"; }
+        if !AppState.timer-has-next: VerticalLayout {
+            spacing: 6px;
+            Text { text: "No timer coming up"; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; wrap: word-wrap; }
+            Text {
+                text: "Add a timer, then arm it here the evening before: the screen checks that the beans, filter, cup and water are ready.";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                wrap: word-wrap;
+            }
+        }
+        if AppState.timer-has-next: VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: AppState.timer-next-when;
+                color: Theme.text;
+                font-size: Layout.short ? Theme.fs-title : Theme.fs-hero;
+                font-weight: 800;
+                overflow: elide;
+            }
+            Text { text: AppState.timer-next-recipe; color: Theme.text; font-size: Theme.fs-body; font-weight: 600; overflow: elide; }
+        }
+        if AppState.timer-has-next: HorizontalLayout {
+            Chip {
+                has-icon: true;
+                icon: root.armed ? Icons.alarm-on : Icons.alarm;
+                text: root.armed ? "Armed" : "Not armed";
+                fg: root.armed ? Theme.success : Theme.text-2;
+                fill: root.armed ? Theme.success-soft : Theme.surface-2;
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+        if AppState.timer-has-next && !Layout.short: Text {
+            text: root.armed ? "It brews after a one-minute countdown on this screen. Cancel any time."
+                : AppState.timer-blocked != "" ? AppState.timer-blocked
+                : "Fill the grinder, put the filter and cup in place, fill the water, then arm it.";
+            color: !root.armed && AppState.timer-blocked != "" ? Theme.warning : Theme.text-2;
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+        }
+        if !Layout.stack: Rectangle { vertical-stretch: 1; }
+        if AppState.timer-has-next && root.armed: Button {
+            min-height: Layout.compact ? 44px : 52px;
+            pad-x: Layout.compact ? 10px : 22px;
+            text: "Disarm";
+            kind: ButtonKind.outline;
+            has-icon: true;
+            icon: Icons.alarm-off;
+            clicked => { AppState.disarm-timer(); }
+        }
+        if AppState.timer-has-next && !root.armed: Button {
+            min-height: Layout.compact ? 44px : 52px;
+            pad-x: Layout.compact ? 10px : 22px;
+            text: "Prepare & arm";
+            has-icon: !Layout.narrow;
+            icon: Icons.checklist;
+            enabled: AppState.timer-blocked == "";
+            clicked => { AppState.overlay = Overlay.arm-timer; }
+        }
+    }
+}
+
+// The timers, the add button and the evening reminder.
+component TimerList inherits Card {
+    Flickable {
+        content-width: self.width;
+        content-height: col.preferred-height;
+        flicked => { AppState.activity(); }
+        col := VerticalLayout {
+            width: parent.width;
+            padding: Layout.card-pad;
+            spacing: 8px;
+            HorizontalLayout {
+                SectionTitle { text: "TIMERS"; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                Button {
+                    min-height: 40px;
+                    pad-x: 14px;
+                    text: "New";
+                    has-icon: true;
+                    icon: Icons.plus;
+                    kind: ButtonKind.secondary;
+                    clicked => { AppState.open-timer(""); }
+                }
+            }
+            if AppState.timers.length == 0: Text {
+                text: "No timers yet.";
+                color: Theme.text-3;
+                font-size: Theme.fs-small;
+            }
+            for t in AppState.timers: TimerRowView { timer: t; }
+            Rectangle { height: 4px; }
+            HorizontalLayout {
+                spacing: 10px;
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    Text { text: "Evening reminder"; color: Theme.text; font-size: Theme.fs-body; font-weight: 600; }
+                    Text {
+                        text: "If tomorrow's timer isn't armed yet.";
+                        color: Theme.text-2;
+                        font-size: Theme.fs-caption;
+                        wrap: word-wrap;
+                    }
+                }
+                Stepper {
+                    value: AppState.remind-slot;
+                    minimum: 0;
+                    maximum: 48;
+                    display: self.value == 0 ? "Off"
+                        : (floor((self.value - 1) / 2) < 10 ? "0" : "") + floor((self.value - 1) / 2) + (mod(self.value - 1, 2) == 0 ? ":00" : ":30");
+                    changed(v) => { AppState.set-remind-slot(v); }
+                }
+            }
+        }
+    }
+}
+
+export component TimersPage inherits Rectangle {
+    property <length> next-w: Layout.narrow ? 190px : Layout.compact ? 220px : Layout.large ? 340px : 280px;
+    VerticalLayout {
+        Header {
+            title: "Timers";
+            subtitle: "Brew at a set time · arm each one at the machine";
+        }
+        if !Layout.stack: HorizontalLayout {
+            vertical-stretch: 1;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            padding-bottom: Layout.pad-bottom;
+            spacing: Layout.gap;
+            NextCard { width: root.next-w; }
+            TimerList { horizontal-stretch: 1; }
+        }
+        if Layout.stack: VerticalLayout {
+            vertical-stretch: 1;
+            alignment: start;
+            padding-left: Layout.pad-left;
+            padding-right: Layout.pad-right;
+            padding-bottom: Layout.pad-bottom;
+            spacing: Layout.gap;
+            NextCard { vertical-stretch: 0; }
+            TimerList { vertical-stretch: 1; }
+        }
+    }
+}

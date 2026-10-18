@@ -52,6 +52,10 @@ pub struct StoredRecipe {
 struct File {
     #[serde(default)]
     recipes: Vec<StoredRecipe>,
+    /// The newest starter set this library has been given (see [`STARTERS`]). Missing in
+    /// files from before sets were numbered, which had set 1.
+    #[serde(default)]
+    starters: u32,
 }
 
 /// The library.
@@ -59,14 +63,39 @@ struct File {
 pub struct RecipeStore {
     path: PathBuf,
     items: Vec<StoredRecipe>,
+    starters: u32,
 }
 
-/// The starter recipes shipped with the repo (`recipes/*.yaml`), seeded on first run.
-pub const STARTERS: [&str; 3] = [
-    include_str!("../../../../recipes/example-washed.yaml"),
-    include_str!("../../../../recipes/example-natural.yaml"),
-    include_str!("../../../../recipes/example-iced.yaml"),
+/// The starter recipes shipped with the repo (`recipes/*.yaml`), each with the starter set
+/// it arrived in. A new library gets them all; an existing one gets only the sets added
+/// since, so an update brings the tea starters to a library made before them.
+pub const STARTERS: [(u32, &str); 6] = [
+    (1, include_str!("../../../../recipes/example-washed.yaml")),
+    (1, include_str!("../../../../recipes/example-natural.yaml")),
+    (1, include_str!("../../../../recipes/example-iced.yaml")),
+    (2, include_str!("../../../../recipes/example-tea-green.yaml")),
+    (2, include_str!("../../../../recipes/example-tea-black.yaml")),
+    (2, include_str!("../../../../recipes/example-tea-oolong.yaml")),
 ];
+
+/// The newest starter set.
+const STARTER_SET: u32 = 2;
+
+/// A tea recipe (`kind: tea`). The screen files it under Tea and brews it with the grinder
+/// off.
+pub fn is_tea(recipe: &Recipe) -> bool {
+    recipe.kind.as_deref().is_some_and(|k| k.trim().eq_ignore_ascii_case("tea"))
+}
+
+/// The recipe's own validation plus the screen's rules: a tea recipe never grinds (its
+/// leaves would go through the grinder).
+pub fn check(recipe: &Recipe) -> Result<(), String> {
+    recipe.validate().map_err(|e| e.0)?;
+    if is_tea(recipe) && !recipe.no_grind() {
+        return Err("a tea recipe brews with the grinder off: set grind to 0".into());
+    }
+    Ok(())
+}
 
 /// Parse recipe text: YAML or JSON, one recipe, a list, or `{"recipes": [...]}`.
 ///
@@ -105,36 +134,43 @@ pub fn to_yaml(recipe: &Recipe) -> String {
 }
 
 impl RecipeStore {
-    /// Open (or create) the store at `path`; seeds the starter recipes if it doesn't exist.
+    /// Open (or create) the store at `path`. A new library gets the starter recipes; an
+    /// existing one gets any starter set added since it was made.
     pub fn open(path: PathBuf) -> Self {
-        let (items, fresh) = match read_json::<File>(&path) {
-            Ok(Some(f)) => (f.recipes, false),
-            Ok(None) => (Vec::new(), true),
+        let (items, seeded, fresh) = match read_json::<File>(&path) {
+            Ok(Some(f)) => (f.recipes, f.starters.max(1), false),
+            Ok(None) => (Vec::new(), 0, true),
             Err(e) => {
                 log::error!("recipes: {} is unreadable ({e}); starting empty, keeping a backup", path.display());
                 let _ = std::fs::copy(&path, path.with_extension("json.bad"));
-                (Vec::new(), false)
+                (Vec::new(), STARTER_SET, false)
             }
         };
-        let mut store = Self { path, items };
-        if fresh {
-            for text in STARTERS {
+        let mut store = Self { path, items, starters: seeded };
+        if seeded < STARTER_SET {
+            for (set, text) in STARTERS {
+                if set <= seeded {
+                    continue;
+                }
                 if let Ok(list) = parse_recipes(text) {
                     for r in list.into_iter().flatten() {
                         let _ = store.add(r, RecipeMeta::default());
                     }
                 }
             }
-            if let Some(first) = store.items.first_mut() {
-                first.meta.favorite = true;
+            if fresh {
+                if let Some(first) = store.items.first_mut() {
+                    first.meta.favorite = true;
+                }
             }
+            store.starters = STARTER_SET;
             store.save();
         }
         store
     }
 
     fn save(&self) {
-        if let Err(e) = write_json(&self.path, &File { recipes: self.items.clone() }) {
+        if let Err(e) = write_json(&self.path, &File { recipes: self.items.clone(), starters: self.starters }) {
             log::error!("recipes: save failed: {e}");
         }
     }
@@ -158,7 +194,7 @@ impl RecipeStore {
 
     /// Add a (validated) recipe; returns the new entry.
     pub fn add(&mut self, recipe: Recipe, mut meta: RecipeMeta) -> Result<StoredRecipe, String> {
-        recipe.validate().map_err(|e| e.0)?;
+        check(&recipe)?;
         if self.items.len() >= MAX_RECIPES {
             return Err(format!("the library is full ({MAX_RECIPES} recipes)"));
         }
@@ -173,7 +209,7 @@ impl RecipeStore {
 
     /// Replace a recipe (and optionally its metadata).
     pub fn update(&mut self, id: &str, recipe: Recipe, meta: Option<RecipeMeta>) -> Result<StoredRecipe, String> {
-        recipe.validate().map_err(|e| e.0)?;
+        check(&recipe)?;
         let entry = self.items.iter_mut().find(|r| r.id == id).ok_or("no such recipe")?;
         entry.recipe = recipe;
         if let Some(m) = meta {
@@ -258,7 +294,7 @@ impl RecipeStore {
     /// Replace the whole library (restore from a backup).
     pub fn replace_all(&mut self, items: Vec<StoredRecipe>) -> Result<(), String> {
         for r in &items {
-            r.recipe.validate().map_err(|e| format!("{}: {}", r.recipe.name, e.0))?;
+            check(&r.recipe).map_err(|e| format!("{}: {e}", r.recipe.name))?;
         }
         self.items = items.into_iter().take(MAX_RECIPES).collect();
         self.save();
@@ -275,13 +311,48 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("recipes.json");
         let mut s = RecipeStore::open(p.clone());
-        assert_eq!(s.list().len(), 3);
+        assert_eq!(s.list().len(), STARTERS.len());
         assert!(s.list()[0].meta.favorite);
+        assert_eq!(s.list().iter().filter(|r| is_tea(&r.recipe)).count(), 3);
         let id = s.list()[1].id.clone();
         s.update_meta(&id, |m| m.hidden = true);
         let s2 = RecipeStore::open(p);
-        assert_eq!(s2.visible().len(), 2);
-        assert_eq!(s2.list().len(), 3);
+        assert_eq!(s2.visible().len(), STARTERS.len() - 1);
+        assert_eq!(s2.list().len(), STARTERS.len());
+    }
+
+    #[test]
+    fn a_library_from_before_the_tea_starters_gets_them_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("recipes.json");
+        // A file written before starter sets were numbered: the coffee starters only.
+        let coffee: Vec<StoredRecipe> = STARTERS[..3]
+            .iter()
+            .map(|(_, t)| StoredRecipe {
+                id: new_id(),
+                meta: RecipeMeta::default(),
+                recipe: parse_recipes(t).unwrap().remove(0).unwrap(),
+            })
+            .collect();
+        write_json(&p, &serde_json::json!({ "recipes": coffee })).unwrap();
+        let s = RecipeStore::open(p.clone());
+        assert_eq!(s.list().len(), 6);
+        assert!(!s.list().iter().any(|r| r.meta.favorite), "an existing library keeps its favourites");
+        // Deleting a starter doesn't bring it back.
+        let mut s = RecipeStore::open(p.clone());
+        let tea = s.list().into_iter().find(|r| is_tea(&r.recipe)).unwrap();
+        s.delete(&tea.id);
+        assert_eq!(RecipeStore::open(p).list().len(), 5);
+    }
+
+    #[test]
+    fn tea_never_grinds() {
+        let mut r = parse_recipes(STARTERS[3].1).unwrap().remove(0).unwrap();
+        assert!(is_tea(&r) && check(&r).is_ok());
+        r.grind = 40;
+        assert!(check(&r).unwrap_err().contains("grinder off"));
+        r.kind = Some("custom".into());
+        assert!(check(&r).is_ok());
     }
 
     #[test]
@@ -296,12 +367,12 @@ mod tests {
         // A store export re-imports.
         let export = serde_json::json!({"recipes": s.list()}).to_string();
         let (again, errs) = s.import(&export).unwrap();
-        assert_eq!((again.len(), errs.len()), (4, 0));
+        assert_eq!((again.len(), errs.len()), (STARTERS.len() + 1, 0));
     }
 
     #[test]
     fn yaml_export_matches_cli_schema() {
-        let r = parse_recipes(STARTERS[0]).unwrap().remove(0).unwrap();
+        let r = parse_recipes(STARTERS[0].1).unwrap().remove(0).unwrap();
         let y = to_yaml(&r);
         assert!(y.starts_with("name: Example Washed\ndose_g: 16\ngrind: 62\nratio: 15\n"), "{y}");
         let back = parse_recipes(&y).unwrap().remove(0).unwrap();
@@ -314,10 +385,9 @@ mod tests {
         let mut s = RecipeStore::open(dir.path().join("r.json"));
         let ids: Vec<String> = s.items.iter().map(|r| r.id.clone()).collect();
         s.reorder(&[ids[2].clone(), ids[0].clone()]);
-        assert_eq!(
-            s.items.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
-            vec![ids[2].clone(), ids[0].clone(), ids[1].clone()]
-        );
+        let mut want = vec![ids[2].clone(), ids[0].clone(), ids[1].clone()];
+        want.extend_from_slice(&ids[3..]);
+        assert_eq!(s.items.iter().map(|r| r.id.clone()).collect::<Vec<_>>(), want);
         let d = s.duplicate(&ids[0]).unwrap();
         assert!(d.recipe.name.ends_with(" copy"));
     }

@@ -29,8 +29,9 @@ pub mod history;
 pub mod media;
 pub mod presets;
 pub mod recipes;
+pub mod schedule;
 pub mod settings;
 pub mod util;
 
 pub use app::{App, Data, Event, Hotspot, PinPurpose, Platform, PlatformInfo, ToastKind, VideoProfile};
-pub use controller::{BrewStatus, Link, MachineStatus};
+pub use controller::{BrewKind, BrewStatus, Link, MachineStatus};

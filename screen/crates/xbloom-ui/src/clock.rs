@@ -3,22 +3,7 @@
 //! Works on both targets: glibc reads the system zone on the Pi; on the ESP32 the firmware sets
 //! the POSIX `TZ` variable from the settings and SNTP sets the clock.
 
-/// A broken-down local time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LocalTime {
-    /// 0–23.
-    pub hour: u32,
-    /// 0–59.
-    pub minute: u32,
-    /// 0 = Sunday.
-    pub weekday: u32,
-    /// 1–31.
-    pub day: u32,
-    /// 0 = January.
-    pub month: u32,
-    /// e.g. 2026.
-    pub year: i32,
-}
+pub use xbloom_app::util::LocalTime;
 
 extern "C" {
     fn tzset();
@@ -32,21 +17,7 @@ pub fn reload_zone() {
 
 /// Local time for a Unix timestamp.
 pub fn local(ts: i64) -> LocalTime {
-    let t = ts as libc::time_t;
-    // SAFETY: `tm` is plain data; localtime_r writes it and doesn't retain the pointers.
-    let tm = unsafe {
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&t, &mut tm);
-        tm
-    };
-    LocalTime {
-        hour: tm.tm_hour as u32,
-        minute: tm.tm_min as u32,
-        weekday: tm.tm_wday as u32,
-        day: tm.tm_mday as u32,
-        month: tm.tm_mon as u32,
-        year: tm.tm_year + 1900,
-    }
+    xbloom_app::util::local_time(ts)
 }
 
 /// Local time now.
@@ -118,7 +89,7 @@ mod tests {
     use super::*;
 
     fn t(hour: u32, minute: u32) -> LocalTime {
-        LocalTime { hour, minute, weekday: 6, day: 17, month: 9, year: 2026 }
+        LocalTime { hour, minute, second: 0, weekday: 6, day: 17, month: 9, year: 2026 }
     }
 
     #[test]

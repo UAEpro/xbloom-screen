@@ -46,6 +46,8 @@ pub enum Command {
         recipe_id: Option<String>,
         /// 🔥 Send commit + start after loading. `false` = load only (approve on the machine).
         start: bool,
+        /// What the run is for.
+        kind: BrewKind,
     },
     /// Cancel the current brew / disarm.
     Cancel,
@@ -62,6 +64,20 @@ pub enum Command {
     SimFault(Option<SimFault>),
     /// Stop the thread.
     Shutdown,
+}
+
+/// What a run of the machine is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BrewKind {
+    /// A library recipe, started from the screen (or approved on the machine).
+    #[default]
+    Recipe,
+    /// The rinse-filter button: hot water through the empty filter. Not a brew, so it isn't
+    /// recorded in history.
+    Rinse,
+    /// A library recipe started by an armed timer.
+    Scheduled,
 }
 
 /// Link state.
@@ -86,6 +102,8 @@ pub struct BrewStatus {
     pub recipe_name: String,
     /// Started remotely from the screen.
     pub remote_start: bool,
+    /// What the run is for.
+    pub kind: BrewKind,
     /// `connecting`, `loading`, `starting`, `armed`, `awaiting_confirm`, `grinding`,
     /// `brewing`, `drawdown` or `finished`.
     pub stage: String,
@@ -397,7 +415,7 @@ impl Controller {
                 });
             }
             Command::Scan => self.scan(),
-            Command::Brew { recipe, recipe_id, start } => self.brew(&recipe, recipe_id, start),
+            Command::Brew { recipe, recipe_id, start, kind } => self.brew(&recipe, recipe_id, start, kind),
             Command::Cancel => {
                 if self.machine().is_connected() {
                     if let Err(e) = self.machine().cancel() {
@@ -565,7 +583,7 @@ impl Controller {
         self.app.emit(Event::BrewFinished { outcome: "error".into(), entry: None });
     }
 
-    fn brew(&mut self, recipe: &Recipe, recipe_id: Option<String>, start: bool) {
+    fn brew(&mut self, recipe: &Recipe, recipe_id: Option<String>, start: bool, kind: BrewKind) {
         let stages: Vec<String> = (0..recipe.pours.len()).map(|i| xbloom_core::brew::stage_label(recipe, i)).collect();
         let target = recipe.dose_g as f32 * recipe.effective_ratio() as f32;
         self.status(|s| {
@@ -573,6 +591,7 @@ impl Controller {
                 recipe_id: recipe_id.clone(),
                 recipe_name: recipe.name.clone(),
                 remote_start: start,
+                kind,
                 stage: "connecting".into(),
                 message: "Connecting to the machine…".into(),
                 stage_index: 0,
@@ -687,7 +706,7 @@ impl Controller {
         if outcome.needs_cancel() && self.machine().is_connected() {
             let _ = self.machine().cancel();
         }
-        self.finish_brew(recipe, recipe_id, start, &mon, outcome);
+        self.finish_brew(recipe, recipe_id, start, kind, &mon, outcome);
         // Catch the transport up with demo mode, in case it was switched during the brew.
         let simulator = self.app.settings().machine.simulator;
         if simulator != self.using_sim() {
@@ -713,6 +732,7 @@ impl Controller {
         recipe: &Recipe,
         recipe_id: Option<String>,
         start: bool,
+        kind: BrewKind,
         mon: &BrewMonitor,
         outcome: BrewOutcome,
     ) {
@@ -729,7 +749,8 @@ impl Controller {
             b.coffee_g = mon.final_coffee_g();
             b.progress = if outcome == BrewOutcome::Completed { 1.0 } else { mon.progress() };
         });
-        let entry = (outcome == BrewOutcome::Completed).then(|| {
+        // A rinse is water through an empty filter, not a brew: it isn't recorded.
+        let entry = (outcome == BrewOutcome::Completed && kind != BrewKind::Rinse).then(|| {
             let max_points = self.app.history.lock().unwrap().max_points;
             let samples: Vec<Sample> = mon.samples().to_vec();
             let e = HistoryEntry::new(

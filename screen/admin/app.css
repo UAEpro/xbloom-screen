@@ -83,7 +83,7 @@ h3 { font-size: 15px; font-weight: 700; }
 .pin-input { font-size: 28px; letter-spacing: 0.4em; text-align: center; padding: 14px; }
 
 /* ── shell ────────────────────────────────────────────────────────────────── */
-.shell { min-height: 100vh; display: grid; grid-template-columns: 1fr; }
+.shell { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); }
 .sidebar { display: none; }
 .topbar {
   position: sticky; top: 0; z-index: 5;
@@ -103,7 +103,7 @@ main { padding: 18px 16px 110px; width: 100%; max-width: 1080px; margin: 0 auto;
 
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
   padding: 6px 6px max(8px, env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -118,7 +118,7 @@ main { padding: 18px 16px 110px; width: 100%; max-width: 1080px; margin: 0 auto;
 .navlink.active { color: var(--accent-strong); background: var(--accent-soft); }
 
 @media (min-width: 900px) {
-  .shell { grid-template-columns: 236px 1fr; }
+  .shell { grid-template-columns: 236px minmax(0, 1fr); }
   .tabbar { display: none; }
   .sidebar {
     display: flex; flex-direction: column; gap: 4px;
@@ -165,7 +165,7 @@ main { padding: 18px 16px 110px; width: 100%; max-width: 1080px; margin: 0 auto;
 .pill.accent { background: var(--accent-soft); color: var(--accent-strong); }
 .pill.warn { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
 
-label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 650; color: var(--text-2); }
+label.field, div.field { display: grid; gap: 6px; font-size: 13px; font-weight: 650; color: var(--text-2); }
 .input, select.input, textarea.input {
   width: 100%; min-height: 44px; padding: 10px 12px;
   background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm);
@@ -182,7 +182,7 @@ textarea.input { min-height: 120px; font-family: ui-monospace, "SF Mono", Menlo,
 .setting .text b { display: block; font-weight: 650; }
 .setting .text span { display: block; font-size: 13px; color: var(--text-2); margin-top: 2px; }
 
-.switch { position: relative; width: 50px; height: 30px; flex: none; }
+.switch { position: relative; display: inline-block; width: 50px; height: 30px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .switch span { position: absolute; inset: 0; border-radius: 15px; background: var(--surface-3); transition: background 0.15s; cursor: pointer; }
 .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 25%); transition: transform 0.15s; }
@@ -218,10 +218,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .recipe-row:last-child { border-bottom: 0; }
 .recipe-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
 .chipdot { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center; color: #fff; font-weight: 750; }
+.chipdot svg { width: 20px; height: 20px; }
 .recipe-row .meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
 .star { color: var(--text-3); background: none; border: 0; padding: 6px; cursor: pointer; border-radius: 10px; }
 .star.on { color: var(--warning); }
 .star svg { width: 20px; height: 20px; }
+.days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.days button { min-width: 50px; min-height: 40px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-weight: 650; cursor: pointer; }
+.days button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); }
 .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 
 .pours { display: grid; gap: 10px; }

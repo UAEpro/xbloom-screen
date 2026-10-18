@@ -5,6 +5,40 @@ Python package. Releases are tagged `screen-vX.Y.Z` (see
 [docs/RELEASING.md](../docs/RELEASING.md#xbloom-screen-releases)); the rolling
 `screen-latest` pre-release always holds the newest build of `main`.
 
+## Unreleased
+
+### The screen
+
+- **Tea recipes.** A recipe can be coffee or tea. Tea brews with the grinder off, so the
+  leaves go in a paper filter. Green, black and oolong starter teas come with the coffee
+  starters, and a filter on the home screen shows all recipes, coffee only or tea only. Tea
+  cards show water, temperature and time instead of dose and grind.
+- **Rinse the filter.** A Rinse button on the home screen pours hot water through the empty
+  filter and dripper with the grinder off (100 ml at 95 °C by default, set in Settings →
+  Machine). It starts with the same hold gesture as a brew and isn't added to the history.
+- **Timers.** Brew at a set time, once or on chosen weekdays. A timer never brews on its
+  own: each run is armed at the machine, after a checklist (beans or leaves, filter and
+  dripper, cup, water) and **Hold to arm**. When the run is due, the screen counts down for
+  a minute with **Cancel**. A late run (screen off) or one that clashes with a running brew
+  is skipped, not brewed late, and editing the timer or its recipe disarms it. An optional
+  evening reminder asks you to arm the next morning's timer. The new Timers page lists the
+  timers and the next run.
+
+### The admin panel
+
+- A **Timers** page: add, edit, switch off and delete timers, see the next run, and disarm
+  it or cancel its countdown. The API has no way to arm a timer or start a brew.
+- The recipe editor has a **Coffee / Tea** type. A tea recipe's grind is off, and its dose
+  (bookkeeping for the machine's ratio check) follows its water.
+- Rinse water, rinse temperature and the timer reminder in Settings → Machine.
+- Fixes: on a phone, the top bar could make every page scroll sideways; Enter now submits
+  the two-field PIN setup form.
+
+### Recipes
+
+- A brew ratio above **1:25.5** is rejected, in the Python package and here: the machine
+  stores the ratio ×10 in one byte, so more water per gram doesn't fit.
+
 ## 0.1.0 (2026-10-18)
 
 The first release.

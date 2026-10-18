@@ -5939,6 +5939,7 @@ dependencies = [
  "flate2",
  "getrandom",
  "hmac",
+ "libc",
  "log",
  "pbkdf2",
  "serde",
@@ -5978,7 +5979,6 @@ dependencies = [
 name = "xbloom-ui"
 version = "0.1.0"
 dependencies = [
- "libc",
  "log",
  "qrcodegen",
  "slint",

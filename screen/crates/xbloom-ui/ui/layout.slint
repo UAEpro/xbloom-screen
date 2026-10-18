@@ -24,8 +24,9 @@ export global Layout {
     out property <bool> large: !compact && min(width, height) >= 700px;
 
     // ── navigation ──
-    out property <bool> rail-labels: height >= 360px;
-    out property <bool> rail-logo: height >= 470px;
+    // Five rail items and the lock button: labels need ~440 px of height, the logo ~540 px.
+    out property <bool> rail-labels: height >= 440px;
+    out property <bool> rail-logo: height >= 540px;
     out property <length> rail-width: portrait ? 0px : !rail-labels ? 64px : narrow ? 76px : 88px;
     out property <length> tabbar-height: portrait ? (compact ? 60px : 68px) : 0px;
     out property <length> header-height: short ? 56px : compact ? 64px : 76px;

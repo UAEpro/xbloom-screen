@@ -29,7 +29,6 @@ xbloom-core = { workspace = true, features = ["std"] }
 xbloom-app = { workspace = true }
 slint = { version = "1.18", default-features = false, features = ["compat-1-2"] }
 qrcodegen = "1.8"
-libc = "0.2"
 log = { workspace = true }
 png = { version = "0.18", optional = true }
 

@@ -126,9 +126,12 @@ project in `screen/firmware/esp32s3`). Layout and design notes are in
 - **The safety invariant applies here too.** `xbloom-core`'s `build_load_frames()`
   returns only `a4, a6, a8` and the pours frame, with the same commit/start/cancel guard;
   `protocol::tests::load_frames_are_load_only` and `load_frames_opcode_order` mirror the
-  Python tests. The admin HTTP API has **no brew-start endpoint** (a test in
-  `xbloom-app/src/api.rs` checks it); on the device, the deliberate **Hold to brew**
-  gesture is the only way to start. Keep all of that.
+  Python tests. The admin HTTP API has **no brew-start and no timer-arm endpoint** (a test
+  in `xbloom-app/src/api.rs` checks it). On the device, water only starts from three
+  deliberate gestures: **Hold to brew**, **Hold to rinse**, and a **timer armed at the
+  screen** (checklist + Hold to arm, one run, a cancellable one-minute countdown, skipped
+  rather than brewed late). Never let the panel arm a timer, never auto-arm or re-arm one,
+  and never start a run without its countdown. Keep all of that.
 - **Byte parity with this package.** `screen/tools/gen_golden.py` runs `xbloom_ble` over a
   set of recipes and writes golden vectors (frames, CRCs, telemetry decodes, validation
   messages) that the Rust tests assert. After **any** change to the protocol, recipe

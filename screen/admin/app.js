@@ -5,6 +5,7 @@
 // always inserted as text, never as HTML.
 //
 // The panel can't start a brew — hot water only flows from the touchscreen — but it can stop one.
+// It can plan timed brews, but each run is armed at the machine, never from here.
 
 import { ICONS } from "/icons.js";
 import { probeVideo, convertVideo, convertPhoto } from "/xbv.js";
@@ -150,7 +151,7 @@ function upload(path, blob, onProgress) {
 
 // ── state, theme, boot ──────────────────────────────────────────────────────────────────
 
-const S = { info: null, settings: null, status: null, recipes: [], presets: null, media: [], history: [], authed: false, scanning: false };
+const S = { info: null, settings: null, status: null, recipes: [], presets: null, media: [], history: [], timers: null, authed: false, scanning: false };
 const $app = document.getElementById("app");
 
 function applyTheme() {
@@ -186,11 +187,11 @@ async function boot() {
 }
 
 async function loadAll() {
-  const [settings, status, recipes, presets, media, history] = await Promise.all([
+  const [settings, status, recipes, presets, media, history, timers] = await Promise.all([
     api("GET", "/api/settings"), api("GET", "/api/status"), api("GET", "/api/recipes"),
-    api("GET", "/api/presets"), api("GET", "/api/media"), api("GET", "/api/history"),
+    api("GET", "/api/presets"), api("GET", "/api/media"), api("GET", "/api/history"), api("GET", "/api/timers"),
   ]);
-  Object.assign(S, { settings, status, recipes, presets, media, history });
+  Object.assign(S, { settings, status, recipes, presets, media, history, timers });
   setAccent(settings.appearance.accent);
 }
 
@@ -202,7 +203,8 @@ function renderLogin() {
   const pin = h("input", { class: "input pin-input", type: "password", inputmode: "numeric", autocomplete: setup ? "new-password" : "current-password", maxlength: "8", placeholder: "••••", "aria-label": "PIN" });
   const pin2 = setup ? h("input", { class: "input pin-input", type: "password", inputmode: "numeric", autocomplete: "new-password", maxlength: "8", placeholder: "••••", "aria-label": "Confirm PIN" }) : null;
   const err = h("p", { class: "small", style: "color:var(--danger);margin:0;min-height:20px" });
-  const go = btn(setup ? "Create PIN" : "Sign in", submit, "block");
+  // A submit button, so Enter works from either PIN field (the form's onsubmit runs it).
+  const go = btn(setup ? "Create PIN" : "Sign in", null, "block", null, { type: "submit" });
   async function submit(e) {
     e?.preventDefault();
     err.textContent = "";
@@ -240,11 +242,13 @@ function renderLogin() {
 
 // ── shell + router ──────────────────────────────────────────────────────────────────────
 
+// [href, label, icon, short label for the phone tab bar]
 const NAV = [
   ["#/", "Home", "layout-dashboard"],
   ["#/recipes", "Recipes", "book-open"],
+  ["#/timers", "Timers", "alarm-clock"],
   ["#/presets", "Dial", "disc-3"],
-  ["#/screensaver", "Screensaver", "film"],
+  ["#/screensaver", "Screensaver", "film", "Saver"],
   ["#/history", "History", "history"],
   ["#/settings", "Settings", "settings"],
 ];
@@ -257,12 +261,12 @@ function machinePill() {
 }
 
 function renderShell() {
-  const nav = (cls) => NAV.map(([href, label, ico]) => h("a", { class: `navlink ${cls}`, href, "data-href": href }, icon(ico), label));
+  const nav = (short) => NAV.map(([href, label, ico, tab]) => h("a", { class: "navlink", href, "data-href": href, title: label }, icon(ico), (short && tab) || label));
   $app.replaceChildren(
     h("div", { class: "shell" },
       h("aside", { class: "sidebar" },
         h("div", { class: "brand" }, h("div", { class: "logo" }, icon("coffee")), h("div", {}, h("b", {}, S.info.device_name), h("div", { class: "faint small" }, "Admin"))),
-        nav(""),
+        nav(false),
         h("div", { class: "spacer" }),
         btn("Sign out", signOut, "ghost", "log-out")),
       h("div", {},
@@ -272,7 +276,7 @@ function renderShell() {
           machinePill(),
           h("button", { class: "btn icon ghost", type: "button", title: "Sign out", "aria-label": "Sign out", onclick: signOut }, icon("log-out"))),
         h("main", { id: "main" })),
-      h("nav", { class: "tabbar" }, nav(""))));
+      h("nav", { class: "tabbar" }, nav(true))));
   route();
   clearInterval(S.poller);
   S.poller = setInterval(poll, 2000);
@@ -289,6 +293,7 @@ const ROUTES = [
   [/^#\/recipes$/, pageRecipes],
   [/^#\/recipes\/new$/, () => pageEditor(null)],
   [/^#\/recipes\/([\w-]+)$/, (m) => pageEditor(m[1])],
+  [/^#\/timers$/, pageTimers],
   [/^#\/presets$/, pagePresets],
   [/^#\/screensaver$/, pageScreensaver],
   [/^#\/history$/, pageHistory],
@@ -342,6 +347,10 @@ async function poll() {
   if (live) live.replaceWith(liveCards());
   const pstatus = document.getElementById("preset-status");
   if (pstatus) pstatus.replaceWith(presetStatus());
+  if (document.getElementById("timer-status")) {
+    try { S.timers = await api("GET", "/api/timers"); } catch { return; }
+    document.getElementById("timer-status")?.replaceWith(timerStatus());
+  }
 }
 
 // ── home ────────────────────────────────────────────────────────────────────────────────
@@ -425,6 +434,7 @@ function pageHome() {
 // ── recipes ─────────────────────────────────────────────────────────────────────────────
 
 function kindOf(r) {
+  if ((r.kind || "").trim().toLowerCase() === "tea") return "tea";
   if (r.grind === 0) return "no-grind";
   if (r.ice_g != null || r.hot_water_ml != null || /iced/i.test(r.name)) return "iced";
   return "filter";
@@ -470,12 +480,12 @@ function recipeRow(s, i) {
     } catch (ex) { toast(ex.message, "error"); }
   } }, icon("star"));
   return h("div", { class: "recipe-row", onclick: () => (location.hash = `#/recipes/${s.id}`) },
-    h("div", { class: "chipdot", style: `background:${tint}` }, icon(kind === "iced" ? "snowflake" : kind === "no-grind" ? "bean" : "droplet")),
+    h("div", { class: "chipdot", style: `background:${tint}` }, icon(kind === "tea" ? "leaf" : kind === "iced" ? "snowflake" : kind === "no-grind" ? "bean" : "droplet")),
     h("div", { class: "grow" },
       h("div", { class: "row", style: "gap:8px" }, h("b", { class: "ellipsis" }, r.name), s.meta.hidden && h("span", { class: "badge" }, "hidden"), kind !== "filter" && h("span", { class: "badge" }, kind)),
       h("div", { class: "meta" },
-        h("span", {}, `${r.dose_g} g · ${ratioText(ratioOf(r))}`),
-        h("span", {}, r.grind === 0 ? "pre-ground" : `grind ${r.grind}`),
+        kind === "tea" ? h("span", {}, `${r.pours[0]?.temp_c ?? ""} °C`) : h("span", {}, `${r.dose_g} g · ${ratioText(ratioOf(r))}`),
+        kind !== "tea" && h("span", {}, r.grind === 0 ? "pre-ground" : `grind ${r.grind}`),
         h("span", {}, `${totalMl(r)} ml · ${r.pours.length} pours`),
         r.dripper && h("span", {}, r.dripper))),
     star,
@@ -522,6 +532,12 @@ function importDialog() {
 
 const PATTERNS = [["spiral", "Spiral"], ["ring", "Ring"], ["center", "Center"]];
 const blankPour = (i) => ({ label: i === 0 ? "Bloom" : `Pour ${i}`, ml: i === 0 ? 45 : 100, temp_c: 92, pattern: "spiral", agitation: i === 0, pause_s: i === 0 ? 35 : 5, rpm: 100, flow_ml_s: 3.0 });
+// Tea: gentle center pours over the leaves, like the starter tea recipes.
+const teaPours = () => [["Wake", 60, 30], ["Steep 1", 95, 45], ["Steep 2", 95, 30]].map(([label, ml, pause_s]) =>
+  ({ label, ml, temp_c: 85, pattern: "center", agitation: false, pause_s, rpm: 0, flow_ml_s: 3.0 }));
+// With the grinder off the dose is only bookkeeping, but the machine still checks the ratio
+// (at most 1:25.5), so a tea recipe's dose follows its water.
+const teaDose = (r) => Math.min(18, Math.max(1, Math.ceil(totalMl(r) / 25)));
 
 function numField(label, value, onchange, opts = {}) {
   return h("label", { class: "field" }, label,
@@ -552,17 +568,23 @@ function pageEditor(id) {
     }
     return out;
   };
+  const isTea = () => kindOf(r) === "tea";
   const validate = () => {
     clearTimeout(timer);
-    summary.replaceChildren(
+    if (isTea()) {
+      r.dose_g = teaDose(r);
+      const d = document.getElementById("tea-dose");
+      if (d) d.value = r.dose_g;
+    }
+    summary.replaceChildren(...[
       h("span", {}, `Σ pours ${totalMl(r)} ml`),
-      h("span", {}, `ratio ${ratioText(ratioOf(r))}`),
-      h("span", {}, r.grind === 0 ? "pre-ground (grinder off)" : `grind ${r.grind}`));
+      !isTea() && h("span", {}, `ratio ${ratioText(ratioOf(r))}`),
+      h("span", {}, isTea() ? "tea · grinder off" : r.grind === 0 ? "pre-ground (grinder off)" : `grind ${r.grind}`)].filter(Boolean));
     timer = setTimeout(async () => {
       try {
         const v = await api("POST", "/api/recipes/validate", { recipe: clean() });
         status.className = `validation ${v.ok ? "ok" : "bad"}`;
-        status.textContent = v.ok ? `Ready to brew — ${v.total_water_ml} ml at ${ratioText(v.ratio)}.` : v.error;
+        status.textContent = !v.ok ? v.error : isTea() ? `Ready to brew — ${v.total_water_ml} ml of tea, grinder off.` : `Ready to brew — ${v.total_water_ml} ml at ${ratioText(v.ratio)}.`;
       } catch (ex) {
         status.className = "validation bad";
         status.textContent = ex.message;
@@ -570,6 +592,39 @@ function pageEditor(id) {
     }, 250);
   };
   const set = (k) => (v) => { r[k] = v; validate(); };
+
+  // Coffee or tea: tea never grinds, and its dose follows the water (see teaDose).
+  const typeBox = h("div");
+  const basics = h("div", { class: "grid three" });
+  const drawBasics = () => {
+    typeBox.replaceChildren(seg([["coffee", "Coffee"], ["tea", "Tea"]], isTea() ? "tea" : "coffee", setType));
+    basics.replaceChildren(...(isTea()
+      ? [h("label", { class: "field" }, "Machine dose (g)", h("input", { class: "input num", id: "tea-dose", value: r.dose_g, disabled: true })),
+        h("label", { class: "field" }, "Grind", h("input", { class: "input", value: "Off — leaves aren't ground", disabled: true })),
+        h("p", { class: "faint small", style: "margin:0;align-self:center" }, "Set for you from the water: nothing is ground, but the machine checks the ratio.")]
+      : [numField("Dose (g)", r.dose_g, set("dose_g"), { min: 1, max: 18 }),
+        numField("Grind (1–80, 0 = pre-ground)", r.grind, set("grind"), { min: 0, max: 80 }),
+        numField("Ratio (optional, 1:x)", r.ratio, set("ratio"), { min: 1, max: 25.5, step: 0.5, placeholder: "auto" })]));
+  };
+  const setType = (t) => {
+    if (t === (isTea() ? "tea" : "coffee")) return;
+    if (t === "tea") {
+      r.kind = "tea";
+      r.grind = 0;
+      delete r.ratio;
+      if (!stored) r.pours = teaPours();
+    } else {
+      delete r.kind;
+      if (r.grind === 0) r.grind = 55;
+      if (!stored) {
+        r.pours = [blankPour(0), blankPour(1), blankPour(2)];
+        r.dose_g = 15;
+      }
+    }
+    drawBasics();
+    drawPours();
+    validate();
+  };
 
   const drawPours = () => {
     pourBox.replaceChildren(...r.pours.map((p, i) => {
@@ -616,6 +671,7 @@ function pageEditor(id) {
     }
   }, "", "check");
 
+  drawBasics();
   drawPours();
   validate();
   return h("div", {},
@@ -641,10 +697,8 @@ function pageEditor(id) {
         h("div", { class: "grid two" },
           textField("Name", r.name, set("name"), { placeholder: "Ethiopia Natural" }),
           textField("Dripper", r.dripper, set("dripper"), { placeholder: "Omni" })),
-        h("div", { class: "grid three" },
-          numField("Dose (g)", r.dose_g, set("dose_g"), { min: 1, max: 18 }),
-          numField("Grind (1–80, 0 = pre-ground)", r.grind, set("grind"), { min: 0, max: 80 }),
-          numField("Ratio (optional, 1:x)", r.ratio, set("ratio"), { min: 1, max: 30, step: 0.5, placeholder: "auto" })),
+        setting("Type", "Tea brews with the grinder off: put the leaves in a paper filter.", typeBox),
+        basics,
         h("div", { class: "grid three" },
           textField("Time", r.time, set("time"), { placeholder: "~2:30" }),
           numField("Stage temp 1 (°C)", r.stage_temps[0], (v) => { r.stage_temps[0] = v ?? 110; validate(); }, { min: 40, max: 130 }),
@@ -659,6 +713,149 @@ function pageEditor(id) {
         setting("Card colour", null, colors),
         setting("Favourite", "Shown first.", sw(meta.favorite, (v) => (meta.favorite = v), "Favourite")),
         setting("Hidden", "Keep it here but don't show it on the screen.", sw(meta.hidden, (v) => (meta.hidden = v), "Hidden")))));
+}
+
+// ── timers ──────────────────────────────────────────────────────────────────────────────
+//
+// A timer says when to brew; it never brews on its own. Each run is armed at the machine,
+// on the screen, after a checklist (beans or leaves, filter, cup, water) and the hold
+// gesture, then counts down for a minute with a Cancel button. This panel plans timers and
+// can disarm a run, but has no way to arm one.
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function daysText(d) {
+  const k = d.map(Number).join("");
+  if (k === "1111111") return "Every day";
+  if (k === "1111100") return "Weekdays";
+  if (k === "0000011") return "Weekends";
+  if (!d.some(Boolean)) return "Once";
+  return DAY_NAMES.filter((_, i) => d[i]).join(", ");
+}
+
+// A run's time in the screen's clock style.
+const fmtWhen = (ts) => new Date(ts * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: S.settings.appearance.clock_24h ? "h23" : "h12" });
+// "07:30" as the screen shows it: 07:30 or 7:30 AM.
+function fmtHHMM(t) {
+  if (S.settings.appearance.clock_24h) return t;
+  const [hh, mm] = t.split(":").map(Number);
+  return `${hh % 12 || 12}:${String(mm).padStart(2, "0")} ${hh < 12 ? "AM" : "PM"}`;
+}
+const recipeName = (id) => S.recipes.find((s) => s.id === id)?.recipe.name || "Deleted recipe";
+
+async function reloadTimers() {
+  S.timers = await api("GET", "/api/timers");
+}
+
+function timerStatus() {
+  const st = S.timers.status;
+  const n = st.next;
+  const counting = st.countdown_s != null;
+  const why = !st.clock_set ? "The screen's clock isn't set yet. It syncs once the screen is online."
+    : !st.remote_start ? "Timers need Remote start: turn it on under Settings → Lock & PINs." : null;
+  const disarm = btn(counting ? "Cancel the brew" : "Disarm", async () => {
+    try {
+      await api("POST", "/api/timers/disarm");
+      await reloadTimers();
+      toast(counting ? "Cancelled" : "Disarmed");
+      rerender();
+    } catch (ex) { toast(ex.message, "error"); }
+  }, counting ? "danger" : "outline", "alarm-clock-off");
+  return h("div", { class: "card pad stack", id: "timer-status" },
+    h("div", { class: "row" },
+      h("div", { class: `machine-icon ${n?.armed ? "ok" : ""}` }, icon(n?.armed ? "alarm-clock-check" : "alarm-clock")),
+      h("div", { class: "grow" },
+        h("h2", { class: "ellipsis" }, n ? n.recipe_name : "No timer coming up"),
+        h("div", { class: "muted small" }, n ? `${fmtWhen(n.at)} · ${counting ? `brewing in ${st.countdown_s} s` : n.armed ? "armed" : "not armed"}` : "Add a timer below."))),
+    why && h("div", { class: "validation bad" }, why),
+    n && !n.armed && h("p", { class: "muted small", style: "margin:0" },
+      "Arm it at the machine the evening before: on the screen, open Timers → Prepare & arm. It checks the beans or leaves, filter, cup and water with you first."),
+    n?.armed && h("p", { class: "muted small", style: "margin:0" },
+      "Armed at the machine. It brews after a one-minute countdown on the screen, which can be cancelled there or here. If the machine isn't ready then, the run is skipped."),
+    n?.armed && h("div", {}, disarm));
+}
+
+function timerRow(t) {
+  return h("div", { class: "recipe-row", onclick: () => timerDialog(t) },
+    h("div", { class: "chipdot", style: `background:${t.enabled ? "var(--accent)" : "var(--text-3)"}` }, icon("alarm-clock")),
+    h("div", { class: "grow" },
+      h("b", { style: `font-size:18px;${t.enabled ? "" : "color:var(--text-3)"}` }, fmtHHMM(t.time)),
+      h("div", { class: "meta" }, h("span", {}, daysText(t.days)), h("span", { class: "ellipsis" }, recipeName(t.recipe_id)))),
+    h("span", { onclick: (e) => e.stopPropagation() }, sw(t.enabled, async (v) => {
+      try {
+        await api("PUT", `/api/timers/${t.id}`, { recipe_id: t.recipe_id, time: t.time, days: t.days, enabled: v });
+        await reloadTimers();
+        rerender();
+      } catch (ex) { toast(ex.message, "error"); }
+    }, "On")),
+    h("span", { class: "faint" }, icon("chevron-right")));
+}
+
+function timerDialog(t) {
+  if (!S.recipes.length) return toast("Add a recipe first", "error");
+  const d = t ? structuredClone(t) : { recipe_id: (S.recipes.find((s) => !s.meta.hidden) || S.recipes[0]).id, time: "07:00", days: [true, true, true, true, true, false, false], enabled: true };
+  modal((close) => {
+    const time = h("input", { class: "input", type: "time", value: d.time, required: true, onchange: (e) => (d.time = e.target.value.slice(0, 5)) });
+    const recipe = h("select", { class: "input", onchange: (e) => (d.recipe_id = e.target.value) },
+      S.recipes.map((s) => h("option", { value: s.id, selected: s.id === d.recipe_id }, s.recipe.name + (kindOf(s.recipe) === "tea" ? " (tea)" : ""))));
+    const days = h("div", { class: "days" });
+    const hint = h("div", { class: "faint small" });
+    const drawDays = () => {
+      days.replaceChildren(...DAY_NAMES.map((name, i) =>
+        h("button", { type: "button", class: d.days[i] ? "on" : "", "aria-pressed": String(d.days[i]), onclick: () => { d.days[i] = !d.days[i]; drawDays(); } }, name)));
+      hint.textContent = d.days.some(Boolean) ? daysText(d.days) : `No days picked: it brews once, at the next ${d.time ? fmtHHMM(d.time) : "time"}.`;
+    };
+    drawDays();
+    const save = btn("Save", async () => {
+      if (!/^\d\d:\d\d$/.test(d.time)) return toast("Pick a time", "error");
+      save.disabled = true;
+      try {
+        const body = { recipe_id: d.recipe_id, time: d.time, days: d.days, enabled: d.enabled };
+        if (t) await api("PUT", `/api/timers/${t.id}`, body);
+        else await api("POST", "/api/timers", body);
+        await reloadTimers();
+        toast(t ? "Timer saved" : "Timer added: arm it at the machine", "success");
+        close();
+        rerender();
+      } catch (ex) {
+        toast(ex.message, "error");
+      } finally {
+        save.disabled = false;
+      }
+    }, "", "check");
+    const del = t && btn("Delete", async () => {
+      close();
+      if (!(await confirmDialog("Delete this timer?", `${fmtHHMM(t.time)} · ${daysText(t.days)} · ${recipeName(t.recipe_id)}`))) return;
+      try {
+        await api("DELETE", `/api/timers/${t.id}`);
+        await reloadTimers();
+        toast("Timer deleted");
+        rerender();
+      } catch (ex) { toast(ex.message, "error"); }
+    }, "ghost", "trash-2");
+    return h("div", { class: "stack" },
+      h("h2", {}, t ? "Edit timer" : "New timer"),
+      h("div", { class: "grid two" }, h("label", { class: "field" }, "Time (the screen's clock)", time), h("label", { class: "field" }, "Recipe", recipe)),
+      h("div", { class: "field" }, "Days", days, hint),
+      setting("On", "Off keeps the timer without brewing.", sw(d.enabled, (v) => (d.enabled = v), "On")),
+      h("p", { class: "muted small", style: "margin:0" }, "A timer only plans the brew. Each run is armed at the machine, after a checklist on the screen. Changing an armed timer, or its recipe, disarms it."),
+      h("div", { class: "row", style: "justify-content:space-between" }, del || h("span"), h("div", { class: "row" }, btn("Cancel", close, "secondary"), save)));
+  });
+}
+
+function pageTimers() {
+  const list = S.timers.timers;
+  return h("div", {},
+    h("div", { class: "page-head" },
+      h("div", { class: "grow" }, h("h1", {}, "Timers"), h("p", { class: "muted" }, "Coffee or tea at a set time. Plan timers here; arm each run at the machine.")),
+      btn("New timer", () => timerDialog(null), "", "plus")),
+    h("div", { class: "stack" },
+      timerStatus(),
+      h("div", { class: "card", style: "overflow:hidden" },
+        list.length ? list.map(timerRow) : h("div", { class: "empty" }, icon("alarm-clock"), h("div", {}, "No timers yet."))),
+      h("p", { class: "faint small" }, S.settings.timers.remind_at
+        ? `At ${fmtHHMM(S.settings.timers.remind_at)} the screen reminds you if a timer in the next 24 hours isn't armed yet. Change it under Settings → Machine.`
+        : "The evening reminder is off. Turn it on under Settings → Machine.")));
 }
 
 // ── dial presets ────────────────────────────────────────────────────────────────────────
@@ -1012,6 +1209,8 @@ function pageSettings() {
     } catch (ex) { toast(ex.message, "error"); }
   };
   const patch = (body) => run(async () => { S.settings = await api("PUT", "/api/settings", body); setAccent(S.settings.appearance.accent); });
+  // The choices plus the current value (the screen sets values in finer steps).
+  const withValue = (list, v) => (list.includes(v) ? list : [...list, v].sort((a, b) => a - b));
   const sel = (options, value, on) => h("select", { class: "input", style: "width:auto", onchange: (e) => on(Number(e.target.value)) }, options.map(([v, l]) => h("option", { value: v, selected: v === value }, l)));
   const name = h("input", { class: "input", value: s.device_name, maxlength: 40, style: "max-width:260px", onchange: (e) => patch({ device_name: e.target.value }) });
   const pref = localStorage.getItem("xb-theme") || "system";
@@ -1069,7 +1268,16 @@ function pageSettings() {
         setting("Paired machine", s.machine.address ? `${s.machine.name || "xBloom"} · ${s.machine.address}` : "None — pair one from Home or the screen.",
           s.machine.address && btn("Forget", async () => { if (await confirmDialog("Forget the machine?", "The screen disconnects and you'll need to pair again.", "Forget")) run(async () => { await api("POST", "/api/machine/forget"); S.settings = await api("GET", "/api/settings"); }); }, "ghost small")),
         setting("Connect automatically", "Hold the link open for instant brews; reconnect when it drops.", sw(s.machine.auto_connect, (v) => patch({ machine: { auto_connect: v } }), "Connect automatically")),
-        setting("Demo mode", "Drive a built-in simulated machine — try everything without coffee.", sw(s.machine.simulator, (v) => patch({ machine: { simulator: v } }), "Demo mode"))),
+        setting("Demo mode", "Drive a built-in simulated machine — try everything without coffee.", sw(s.machine.simulator, (v) => patch({ machine: { simulator: v } }), "Demo mode")),
+        setting("Rinse water", "The Rinse button on the screen pours this through an empty filter and dripper, grinder off.",
+          sel(withValue([30, 50, 80, 100, 120, 150, 200, 250], s.rinse.ml).map((v) => [v, `${v} ml`]), s.rinse.ml, (v) => run(() => patchSection("rinse", { ml: v })))),
+        setting("Rinse temperature", null, sel(withValue([60, 70, 80, 85, 90, 95], s.rinse.temp_c).map((v) => [v, `${v} °C`]), s.rinse.temp_c, (v) => run(() => patchSection("rinse", { temp_c: v })))),
+        setting("Timer reminder", "In the evening, the screen asks you to arm a timer that runs in the next 24 hours.",
+          h("select", { class: "input", style: "width:auto", onchange: (e) => run(() => patchSection("timers", { remind_at: e.target.value })) },
+            h("option", { value: "", selected: !s.timers.remind_at }, "Off"),
+            Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`)
+              .concat(s.timers.remind_at && !/:(00|30)$/.test(s.timers.remind_at) ? [s.timers.remind_at] : [])
+              .map((t) => h("option", { value: t, selected: t === s.timers.remind_at }, fmtHHMM(t)))))),
       esp && h("div", { class: "card pad stack" },
         h("h3", {}, "Wi-Fi & clock"),
         h("p", { class: "muted small" }, "Without a network the screen hosts its own Wi-Fi (shown under Settings → Admin panel on the screen)."),

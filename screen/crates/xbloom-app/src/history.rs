@@ -184,7 +184,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("h.json");
         let mut h = HistoryStore::open(p.clone(), 3, 10);
-        let r = crate::recipes::parse_recipes(crate::recipes::STARTERS[0]).unwrap().remove(0).unwrap();
+        let r = crate::recipes::parse_recipes(crate::recipes::STARTERS[0].1).unwrap().remove(0).unwrap();
         for i in 0..5 {
             h.record(HistoryEntry::new(i, None, &r, 240.0, 200.0, 150.0, true, "completed", &[], 10));
         }

@@ -3,8 +3,8 @@
 
 import { Theme } from "../theme.slint";
 import { Layout } from "../layout.slint";
-import { AppState, Icons, RecipeCard, Page, PourInfo } from "../state.slint";
-import { Icon, Chip, Card } from "../widgets.slint";
+import { AppState, Icons, RecipeCard, Page, PourInfo, Overlay } from "../state.slint";
+import { Icon, Chip, Card, IconButton } from "../widgets.slint";
 import { Header } from "../chrome.slint";
 
 component MiniStat inherits VerticalLayout {
@@ -89,7 +89,7 @@ component RecipeTile inherits Rectangle {
             border-radius: self.width / 2;
             background: #ffffff33;
             Icon {
-                source: root.recipe.kind == "iced" ? Icons.snowflake : root.recipe.kind == "no-grind" ? Icons.bean : Icons.droplet;
+                source: root.recipe.kind == "tea" ? Icons.leaf : root.recipe.kind == "iced" ? Icons.snowflake : root.recipe.kind == "no-grind" ? Icons.bean : Icons.droplet;
                 tint: #ffffff;
                 width: root.tight ? 16px : 20px;
                 height: self.width;
@@ -106,7 +106,7 @@ component RecipeTile inherits Rectangle {
         Text {
             x: root.tight ? 12px : 16px;
             y: parent.height - self.height - (root.tight ? 8px : 14px);
-            text: root.recipe.dose + " g · " + root.recipe.ratio;
+            text: root.recipe.kind == "tea" ? root.recipe.water + " ml · " + root.recipe.temp : root.recipe.dose + " g · " + root.recipe.ratio;
             color: #ffffff;
             font-size: Theme.fs-title;
             font-weight: 700;
@@ -151,10 +151,16 @@ component RecipeTile inherits Rectangle {
         }
         if !root.tight: PourProfile { pours: root.recipe.pours; tint: root.recipe.tint; }
         if !root.tight: Rectangle { height: 4px; }
-        HorizontalLayout {
+        if root.recipe.kind != "tea": HorizontalLayout {
             spacing: 14px;
             MiniStat { label: "Grind"; value: root.recipe.grind; }
             MiniStat { label: "Water"; value: root.recipe.water + " ml"; }
+            MiniStat { label: "Time"; value: root.recipe.time; }
+        }
+        if root.recipe.kind == "tea": HorizontalLayout {
+            spacing: 14px;
+            MiniStat { label: "Water"; value: root.recipe.water + " ml"; }
+            MiniStat { label: "Temp"; value: root.recipe.temp; }
             MiniStat { label: "Time"; value: root.recipe.time; }
         }
     }
@@ -167,6 +173,39 @@ component RecipeTile inherits Rectangle {
     }
 }
 
+// A pill in the home header: an icon, and a label when there's room.
+component HeaderPill inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> show-text: true;
+    in property <color> tone: Theme.text-2;
+    in property <color> fill: Theme.surface-2;
+    callback clicked();
+    height: Layout.compact ? 40px : 44px;
+    width: row.preferred-width;
+    border-radius: self.height / 2;
+    background: ta.pressed ? Theme.surface-3 : root.fill;
+    row := HorizontalLayout {
+        padding-left: root.show-text ? 12px : 10px;
+        padding-right: root.show-text ? 14px : 10px;
+        spacing: 6px;
+        Icon { y: (parent.height - self.height) / 2; source: root.icon; tint: root.tone; width: 20px; height: 20px; }
+        if root.show-text: Text {
+            text: root.text;
+            color: root.tone;
+            font-size: Theme.fs-small;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.clicked();
+        }
+    }
+}
+
 export component HomePage inherits Rectangle {
     property <bool> brewing: AppState.brew.active && !AppState.brew.finished;
     property <length> banner-h: brewing ? (Layout.compact ? 48px : 56px) : 0px;
@@ -175,7 +214,9 @@ export component HomePage inherits Rectangle {
     // A grid when two rows of tiles fit; otherwise one scrolling row.
     property <bool> grid: Layout.portrait || avail-h >= 2 * 230px + Layout.gap;
     property <length> min-tile: Layout.compact ? 190px : 210px;
-    property <int> count: AppState.recipes.length;
+    property <int> count: AppState.home-recipes.length;
+    // Labels on the header pills only when the header has room for them.
+    property <bool> pill-text: Layout.content-width >= 620px;
     property <int> cols: grid ? max(1, floor((Layout.inner-width + Layout.gap) / (min-tile + Layout.gap))) : max(1, count);
     property <int> rows: grid ? ceil(count / cols) : 1;
     property <length> tile-w: grid ? (Layout.inner-width - (cols - 1) * Layout.gap) / cols : Layout.compact ? 200px : 236px;
@@ -185,6 +226,34 @@ export component HomePage inherits Rectangle {
         Header {
             title: AppState.greeting;
             subtitle: AppState.date + "  ·  " + AppState.recipes.length + (AppState.recipes.length == 1 ? " recipe" : " recipes");
+            compact-pill: Layout.content-width < 640px;
+            // Coffee / tea filter, cycling All → Coffee → Tea.
+            if AppState.has-tea && AppState.has-coffee: HeaderPill {
+                y: (parent.height - self.height) / 2;
+                icon: AppState.recipe-filter == 2 ? Icons.leaf : Icons.coffee;
+                text: AppState.recipe-filter == 0 ? "All" : AppState.recipe-filter == 1 ? "Coffee" : "Tea";
+                show-text: true;
+                tone: AppState.recipe-filter == 0 ? Theme.text-2 : Theme.accent-strong;
+                fill: AppState.recipe-filter == 0 ? Theme.surface-2 : Theme.accent-soft;
+                clicked => { AppState.set-recipe-filter(mod(AppState.recipe-filter + 1, 3)); }
+            }
+            // The next timed brew; green when armed.
+            if AppState.timer-has-next: HeaderPill {
+                y: (parent.height - self.height) / 2;
+                icon: AppState.timer-armed ? Icons.alarm-on : Icons.alarm;
+                text: AppState.timer-next-when;
+                show-text: root.pill-text;
+                tone: AppState.timer-armed ? Theme.success : Theme.text-2;
+                fill: AppState.timer-armed ? Theme.success-soft : Theme.surface-2;
+                clicked => { AppState.navigate(Page.timers); }
+            }
+            HeaderPill {
+                y: (parent.height - self.height) / 2;
+                icon: Icons.rinse;
+                text: "Rinse";
+                show-text: root.pill-text;
+                clicked => { AppState.overlay = Overlay.rinse; }
+            }
         }
         if root.brewing: Rectangle {
             height: root.banner-h;
@@ -248,7 +317,7 @@ export component HomePage inherits Rectangle {
             content-height: max(self.height, 6px + root.rows * root.tile-h + (root.rows - 1) * Layout.gap + Layout.pad-bottom);
             interactive: true;
             flicked => { AppState.activity(); }
-            for r[i] in AppState.recipes: RecipeTile {
+            for r[i] in AppState.home-recipes: RecipeTile {
                 x: Layout.pad-left + mod(i, root.cols) * (root.tile-w + Layout.gap);
                 y: 6px + floor(i / root.cols) * (root.tile-h + Layout.gap);
                 width: root.tile-w;

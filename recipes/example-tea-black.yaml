@@ -1,0 +1,14 @@
+# Example tea: a black tea (breakfast style) through the dripper, grinder off. Put
+# about 5 g of leaves in a paper filter. 250 ml in total (60 + 95 + 95) at 95 °C.
+# dose_g is 10 only so the brew ratio fits the machine's 1:25.5 maximum (grind 0).
+name: Black Tea
+dose_g: 10
+grind: 0
+kind: tea
+dripper: Omni
+water_ml: 250
+note: About 5 g of black tea leaves in a paper filter. Longer steeps for a fuller cup. The grinder stays off.
+pours:
+  - {label: Wake,    ml: 60, temp_c: 95, pattern: center, pause_s: 40, rpm: 0, flow_ml_s: 3.0}
+  - {label: Steep 1, ml: 95, temp_c: 95, pattern: center, pause_s: 60, rpm: 0, flow_ml_s: 3.0}
+  - {label: Steep 2, ml: 95, temp_c: 95, pattern: center, pause_s: 40, rpm: 0, flow_ml_s: 3.0}

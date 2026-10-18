@@ -1,10 +1,11 @@
-// Modal overlays: PIN entry, stop-brew confirmation, the machine sheet, the recipe picker.
-// Each fits the window: at most its design size, at least 12 px clear of the edges.
+// Modal overlays: PIN entry, stop-brew confirmation, the machine sheet, the recipe picker,
+// rinse, and the timer sheets (arming checklist, reminder, editor, countdown). Each fits the
+// window: at most its design size, at least 12 px clear of the edges.
 
 import { Theme } from "theme.slint";
 import { Layout } from "layout.slint";
 import { AppState, Icons, Overlay, LinkState } from "state.slint";
-import { Icon, Card, Button, ButtonKind, PinPad, IconButton } from "widgets.slint";
+import { Icon, Card, Button, ButtonKind, PinPad, IconButton, HoldButton } from "widgets.slint";
 
 component Scrim inherits Rectangle {
     callback dismiss();
@@ -175,13 +176,13 @@ export component PickRecipeOverlay inherits Rectangle {
             HorizontalLayout {
                 Text {
                     horizontal-stretch: 1;
-                    text: "Recipe for slot " + (AppState.picking-slot == 0 ? "A" : AppState.picking-slot == 1 ? "B" : "C");
+                    text: AppState.picking-slot == 3 ? "Recipe for the timer" : "Recipe for slot " + (AppState.picking-slot == 0 ? "A" : AppState.picking-slot == 1 ? "B" : "C");
                     color: Theme.text;
                     font-size: Theme.fs-h2;
                     font-weight: 700;
                     vertical-alignment: center;
                 }
-                IconButton { icon: Icons.close; size: 40px; clicked => { AppState.overlay = Overlay.none; } }
+                IconButton { icon: Icons.close; size: 40px; clicked => { AppState.overlay = AppState.picking-slot == 3 ? Overlay.edit-timer : Overlay.none; } }
             }
             Flickable {
                 vertical-stretch: 1;
@@ -200,17 +201,426 @@ export component PickRecipeOverlay inherits Rectangle {
                             spacing: 12px;
                             Rectangle { y: (parent.height - self.height) / 2; width: 14px; height: 14px; border-radius: 7px; background: r.tint; }
                             Text { text: r.name; color: Theme.text; font-size: Theme.fs-body; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
-                            Text { text: r.dose + " g · " + r.ratio; color: Theme.text-2; font-size: Theme.fs-small; vertical-alignment: center; }
+                            Text { text: r.kind == "tea" ? r.water + " ml · tea" : r.dose + " g · " + r.ratio; color: Theme.text-2; font-size: Theme.fs-small; vertical-alignment: center; }
                         }
                         ta := TouchArea {
                             clicked => {
                                 AppState.activity();
                                 AppState.assign-slot(AppState.picking-slot, r.id);
-                                AppState.overlay = Overlay.none;
+                                AppState.overlay = AppState.picking-slot == 3 ? Overlay.edit-timer : Overlay.none;
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// A sheet with a heading, scrolling content and buttons pinned to the bottom, sized to fit.
+component Sheet inherits Card {
+    in property <image> icon;
+    in property <color> tone: Theme.accent;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <length> content-height;
+    in property <length> buttons-height;
+    property <length> pad: Layout.compact ? 14px : 22px;
+    property <length> head: Layout.compact ? 44px : 52px;
+    // The whole card: heading + content + buttons (the overlay clips it to the window).
+    out property <length> natural: 2 * pad + head + 10px + content-height + 10px + buttons-height;
+    // Width for the content (children can't measure the scroll area themselves).
+    out property <length> inner-width: self.width - 2 * pad;
+    TouchArea {}
+    VerticalLayout {
+        padding: root.pad;
+        spacing: 10px;
+        HorizontalLayout {
+            height: root.head;
+            spacing: 12px;
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: Layout.compact ? 36px : 44px;
+                height: self.width;
+                border-radius: self.width / 2;
+                background: root.tone.transparentize(0.85);
+                Icon { source: root.icon; tint: root.tone; width: 22px; height: 22px; }
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                Text { text: root.title; color: Theme.text; font-size: Theme.fs-h2; font-weight: 700; overflow: elide; }
+                if root.subtitle != "": Text { text: root.subtitle; color: Theme.text-2; font-size: Theme.fs-small; overflow: elide; }
+            }
+        }
+        Flickable {
+            vertical-stretch: 1;
+            min-height: 0px;
+            content-width: self.width;
+            content-height: root.content-height;
+            flicked => { AppState.activity(); }
+            @children
+        }
+        // Room for the buttons the overlay lays over the bottom of the card.
+        Rectangle { height: root.buttons-height; }
+    }
+}
+
+// Rinse the filter: hot water through the empty paper, then pour it away.
+export component RinseOverlay inherits Rectangle {
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    sheet := Sheet {
+        height: min(self.natural, parent.height - 24px);
+        width: min(440px, parent.width - 24px);
+        icon: Icons.rinse;
+        tone: Theme.water;
+        title: "Rinse the filter";
+        subtitle: AppState.rinse-ml + " ml at " + AppState.rinse-temp + "° · grinder off";
+        content-height: info.preferred-height;
+        buttons-height: Layout.compact ? 54px : 64px;
+        info := VerticalLayout {
+            width: sheet.inner-width;
+            spacing: 10px;
+            Text {
+                text: "Hot water through the empty paper filter washes out the paper taste and warms the dripper. Put an empty cup under it and pour the water away afterwards.";
+                color: Theme.text-2;
+                font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+                wrap: word-wrap;
+            }
+        }
+    }
+    HorizontalLayout {
+        x: sheet.x + (Layout.compact ? 14px : 22px);
+        y: sheet.y + sheet.height - self.height - (Layout.compact ? 14px : 22px);
+        width: sheet.width - 2 * (Layout.compact ? 14px : 22px);
+        height: Layout.compact ? 54px : 64px;
+        spacing: 10px;
+        Button {
+            width: Layout.compact ? 92px : 110px;
+            text: "Cancel";
+            kind: ButtonKind.secondary;
+            clicked => { AppState.overlay = Overlay.none; }
+        }
+        if AppState.allow-remote-start: HoldButton {
+            horizontal-stretch: 1;
+            text: "Hold to rinse";
+            tone: Theme.water;
+            ink: Theme.water.darker(0.25);
+            locked: AppState.brew-needs-pin;
+            hold-ms: AppState.hold-ms;
+            activated => { AppState.rinse(true); }
+        }
+        if !AppState.allow-remote-start: Button {
+            horizontal-stretch: 1;
+            text: "Send to machine";
+            has-icon: true;
+            icon: Icons.hand;
+            clicked => { AppState.rinse(false); }
+        }
+    }
+}
+
+// One line of the arming checklist.
+component CheckRow inherits Rectangle {
+    in-out property <bool> checked;
+    in property <string> text;
+    height: Layout.compact ? 46px : 52px;
+    border-radius: 14px;
+    background: root.checked ? Theme.success-soft : ta.pressed ? Theme.surface-3 : Theme.surface-2;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            border-width: root.checked ? 0px : 2px;
+            border-color: Theme.border-strong;
+            background: root.checked ? Theme.success : transparent;
+            if root.checked: Icon { source: Icons.check; tint: #ffffff; width: 18px; height: 18px; }
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.text;
+            color: Theme.text;
+            font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+            font-weight: 600;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            AppState.activity();
+            root.checked = !root.checked;
+        }
+    }
+}
+
+// Arm the next timed brew, at the machine: tick off the checklist, then hold. 🔥 This is the
+// only way a timer gets armed.
+export component ArmTimerOverlay inherits Rectangle {
+    property <bool> beans;
+    property <bool> filter;
+    property <bool> cup;
+    property <bool> water;
+    property <bool> ready: beans && filter && cup && water;
+    property <length> pad: Layout.compact ? 14px : 22px;
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    sheet := Sheet {
+        height: min(self.natural, parent.height - 24px);
+        width: min(480px, parent.width - 24px);
+        icon: Icons.checklist;
+        title: "Arm the timer";
+        subtitle: AppState.timer-next-when + " · " + AppState.timer-next-recipe;
+        content-height: list.preferred-height;
+        buttons-height: Layout.compact ? 54px : 64px;
+        list := VerticalLayout {
+            width: sheet.inner-width;
+            spacing: 8px;
+            CheckRow {
+                text: AppState.timer-next-kind == "tea" ? "Tea leaves are in the paper filter"
+                    : AppState.timer-next-kind == "no-grind" ? "Ground coffee is in the paper filter"
+                    : "Beans are in the grinder";
+                checked <=> root.beans;
+            }
+            CheckRow { text: "The dripper and paper filter are in place"; checked <=> root.filter; }
+            CheckRow { text: "The cup or carafe is under the dripper"; checked <=> root.cup; }
+            CheckRow { text: "The water tank is full"; checked <=> root.water; }
+        }
+    }
+    HorizontalLayout {
+        x: sheet.x + root.pad;
+        y: sheet.y + sheet.height - self.height - root.pad;
+        width: sheet.width - 2 * root.pad;
+        height: Layout.compact ? 54px : 64px;
+        spacing: 10px;
+        Button {
+            width: Layout.compact ? 92px : 110px;
+            text: "Cancel";
+            kind: ButtonKind.secondary;
+            clicked => { AppState.overlay = Overlay.none; }
+        }
+        HoldButton {
+            horizontal-stretch: 1;
+            text: root.ready ? "Hold to arm" : "Tick all four first";
+            enabled: root.ready;
+            locked: AppState.brew-needs-pin;
+            hold-ms: AppState.hold-ms;
+            activated => { AppState.arm-timer(); }
+        }
+    }
+}
+
+// The evening reminder: tomorrow's timer isn't armed yet.
+export component TimerReminderOverlay inherits Rectangle {
+    property <length> pad: Layout.compact ? 14px : 22px;
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    sheet := Sheet {
+        height: min(self.natural, parent.height - 24px);
+        width: min(440px, parent.width - 24px);
+        icon: Icons.alarm;
+        title: AppState.timer-next-when + " · not armed";
+        subtitle: AppState.timer-next-recipe;
+        content-height: info.preferred-height;
+        buttons-height: Layout.compact ? 44px : 52px;
+        info := VerticalLayout {
+            width: sheet.inner-width;
+            Text {
+                text: AppState.timer-next-kind == "tea"
+                    ? "Put the leaves in a paper filter, the cup in place and fill the water tank, then arm it."
+                    : "Fill the grinder, put the filter and cup in place and fill the water tank, then arm it.";
+                color: Theme.text-2;
+                font-size: Layout.compact ? Theme.fs-small : Theme.fs-body;
+                wrap: word-wrap;
+            }
+        }
+    }
+    HorizontalLayout {
+        x: sheet.x + root.pad;
+        y: sheet.y + sheet.height - self.height - root.pad;
+        width: sheet.width - 2 * root.pad;
+        height: Layout.compact ? 44px : 52px;
+        spacing: 10px;
+        Button {
+            horizontal-stretch: 1;
+            text: "Later";
+            kind: ButtonKind.secondary;
+            clicked => { AppState.overlay = Overlay.none; }
+        }
+        Button {
+            horizontal-stretch: 1;
+            text: "Arm now";
+            enabled: AppState.timer-blocked == "";
+            clicked => { AppState.overlay = Overlay.arm-timer; }
+        }
+    }
+}
+
+// − value + for the timer editor.
+component Step inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    callback down();
+    callback up();
+    spacing: 8px;
+    Text { width: 64px; text: root.label; color: Theme.text-2; font-size: Theme.fs-small; vertical-alignment: center; }
+    IconButton { size: 44px; icon: Icons.minus; clicked => { AppState.activity(); root.down(); } }
+    Text {
+        horizontal-stretch: 1;
+        min-width: 56px;
+        text: root.value;
+        color: Theme.text;
+        font-size: Theme.fs-title;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    IconButton { size: 44px; icon: Icons.plus; clicked => { AppState.activity(); root.up(); } }
+}
+
+// New / edit timer: time, days, recipe.
+export component EditTimerOverlay inherits Rectangle {
+    property <length> pad: Layout.compact ? 14px : 22px;
+    property <bool> existing: AppState.edit-timer.id != "";
+    property <[string]> day-names: ["M", "T", "W", "T", "F", "S", "S"];
+    Scrim { dismiss => { AppState.overlay = Overlay.none; } }
+    sheet := Sheet {
+        height: min(self.natural, parent.height - 24px);
+        width: min(460px, parent.width - 24px);
+        icon: Icons.alarm;
+        title: root.existing ? "Edit timer" : "New timer";
+        subtitle: AppState.edit-timer.time;
+        content-height: form.preferred-height;
+        buttons-height: Layout.compact ? 44px : 52px;
+        form := VerticalLayout {
+            width: sheet.inner-width;
+            spacing: 10px;
+            Step {
+                label: "Hour";
+                value: AppState.edit-timer.hh;
+                down => { AppState.edit-timer-shift(-60); }
+                up => { AppState.edit-timer-shift(60); }
+            }
+            Step {
+                label: "Minute";
+                value: AppState.edit-timer.mm;
+                down => { AppState.edit-timer-shift(-5); }
+                up => { AppState.edit-timer-shift(5); }
+            }
+            Text { text: "Days (none = once)"; color: Theme.text-2; font-size: Theme.fs-small; }
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: space-between;
+                for d[i] in AppState.edit-timer.days: Rectangle {
+                    width: Layout.compact ? 36px : 44px;
+                    height: self.width;
+                    border-radius: self.width / 2;
+                    background: d ? Theme.accent : dta.pressed ? Theme.surface-3 : Theme.surface-2;
+                    Text { text: root.day-names[i]; color: d ? Theme.accent-ink : Theme.text-2; font-size: Theme.fs-small; font-weight: 700; }
+                    dta := TouchArea { clicked => { AppState.activity(); AppState.edit-timer-day(i); } }
+                }
+            }
+            Rectangle {
+                height: 52px;
+                border-radius: 14px;
+                background: rta.pressed ? Theme.surface-3 : Theme.surface-2;
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 10px;
+                    spacing: 10px;
+                    Icon { y: (parent.height - self.height) / 2; source: Icons.coffee; tint: Theme.accent; width: 20px; height: 20px; }
+                    Text {
+                        horizontal-stretch: 1;
+                        text: AppState.edit-timer.recipe == "" ? "Choose a recipe" : AppState.edit-timer.recipe;
+                        color: AppState.edit-timer.recipe == "" ? Theme.text-3 : Theme.text;
+                        font-size: Theme.fs-body;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Icon { y: (parent.height - self.height) / 2; source: Icons.next; tint: Theme.text-3; width: 20px; height: 20px; }
+                }
+                rta := TouchArea { clicked => { AppState.activity(); AppState.edit-timer-pick(); } }
+            }
+            if root.existing: Button {
+                text: "Delete this timer";
+                kind: ButtonKind.ghost;
+                min-height: 44px;
+                clicked => { AppState.edit-timer-delete(); }
+            }
+        }
+    }
+    HorizontalLayout {
+        x: sheet.x + root.pad;
+        y: sheet.y + sheet.height - self.height - root.pad;
+        width: sheet.width - 2 * root.pad;
+        height: Layout.compact ? 44px : 52px;
+        spacing: 10px;
+        Button {
+            horizontal-stretch: 1;
+            text: "Cancel";
+            kind: ButtonKind.secondary;
+            clicked => { AppState.overlay = Overlay.none; }
+        }
+        Button {
+            horizontal-stretch: 1;
+            text: "Save";
+            enabled: AppState.edit-timer.recipe-id != "";
+            clicked => { AppState.edit-timer-save(); }
+        }
+    }
+}
+
+// The last minute before an armed timer brews: over everything (even the lock screen), with
+// a big Cancel.
+export component TimerCountdown inherits Rectangle {
+    background: Theme.scrim;
+    TouchArea {}
+    Card {
+        width: min(440px, parent.width - 24px);
+        height: min(col.preferred-height, parent.height - 24px);
+        col := VerticalLayout {
+            padding: Layout.compact ? 16px : 26px;
+            spacing: Layout.compact ? 6px : 12px;
+            alignment: center;
+            Text {
+                text: "Brewing in";
+                color: Theme.text-2;
+                font-size: Theme.fs-body;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: AppState.timer-countdown + " s";
+                color: Theme.text;
+                font-size: Layout.short ? Theme.fs-hero : Theme.fs-display;
+                font-weight: 800;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: AppState.timer-next-recipe;
+                color: Theme.text;
+                font-size: Theme.fs-h2;
+                font-weight: 700;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+            if !Layout.short: Text {
+                text: "Make sure the cup is under the dripper.";
+                color: Theme.text-2;
+                font-size: Theme.fs-small;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+            Button {
+                min-height: Layout.compact ? 48px : 56px;
+                text: "Cancel";
+                kind: ButtonKind.danger;
+                has-icon: true;
+                icon: Icons.alarm-off;
+                clicked => { AppState.disarm-timer(); }
             }
         }
     }

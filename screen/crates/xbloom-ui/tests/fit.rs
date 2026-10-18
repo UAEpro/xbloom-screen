@@ -1,10 +1,11 @@
 //! The controls you must always be able to reach stay inside the window, big enough to tap, at
 //! every supported screen size, landscape and portrait: the brew buttons, Stop and its
-//! confirmation, the PIN keypads, and the button that finishes setup.
+//! confirmation, the PIN keypads, the button that finishes setup, rinse, and the timer
+//! controls (arming, the editor, and the countdown's Cancel).
 
 use i_slint_backend_testing::{AccessibleRole, ElementQuery};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
-use xbloom_ui::{AppState, AppWindow, BrewInfo, Layout, Overlay, Page, PourInfo, RecipeCard};
+use xbloom_ui::{AppState, AppWindow, BrewInfo, Layout, Overlay, Page, PourInfo, RecipeCard, TimerEdit};
 
 const SIZES: [(u32, u32); 12] = [
     (480, 272),
@@ -120,6 +121,36 @@ fn essential_controls_fit_every_screen() {
         g.set_overlay(Overlay::Pin);
         reachable(&ui, size, "PIN dialog", &["1", "0", "Delete", "OK"]);
         g.set_overlay(Overlay::None);
+
+        g.set_brew(BrewInfo::default());
+        g.set_overlay(Overlay::Rinse);
+        reachable(&ui, size, "rinse", &["Hold to rinse", "Cancel"]);
+
+        g.set_timer_has_next(true);
+        g.set_timer_next_when("Tomorrow 07:00".into());
+        g.set_timer_next_recipe("A recipe with a fairly long name".into());
+        g.set_overlay(Overlay::None);
+        g.set_page(Page::Timers);
+        reachable(&ui, size, "timers", &["Prepare & arm", "New"]);
+        g.set_overlay(Overlay::ArmTimer);
+        reachable(&ui, size, "arming checklist", &["Tick all four first", "Cancel"]);
+        g.set_edit_timer(TimerEdit {
+            id: "t1".into(),
+            time: "07:00".into(),
+            hh: "07".into(),
+            mm: "00".into(),
+            days: ModelRc::new(VecModel::from(vec![true, true, true, true, true, false, false])),
+            recipe_id: "r1".into(),
+            recipe: "A recipe".into(),
+        });
+        g.set_overlay(Overlay::EditTimer);
+        reachable(&ui, size, "timer editor", &["Save", "Cancel"]);
+        g.set_overlay(Overlay::TimerReminder);
+        reachable(&ui, size, "timer reminder", &["Arm now", "Later"]);
+        g.set_overlay(Overlay::None);
+        g.set_timer_countdown(42);
+        reachable(&ui, size, "timer countdown", &["Cancel"]);
+        g.set_timer_countdown(-1);
 
         g.set_lock_mode(2);
         g.set_locked(true);

@@ -6,9 +6,11 @@
 //! Changes are announced on an event bus that the UI subscribes to.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
+use std::time::Duration;
 
 use serde::Serialize;
 use xbloom_core::brew::Sample;
@@ -17,13 +19,16 @@ use xbloom_core::sim::{SimConfig, SimFault};
 use xbloom_core::Recipe;
 
 use crate::auth::{valid_pin, Attempt, AuthState, Channel, PinHash};
-use crate::controller::{Command, Controller, MachineStatus};
+use crate::controller::{BrewKind, Command, Controller, Link, MachineStatus};
 use crate::history::{HistoryEntry, HistoryStore};
 use crate::media::MediaStore;
 use crate::presets::PresetStore;
 use crate::recipes::{RecipeMeta, RecipeStore, StoredRecipe};
-use crate::settings::{LockMode, Settings, Wifi};
-use crate::util::{read_json, write_json};
+use crate::schedule::{
+    Schedule, ScheduleInput, ScheduleStore, TimerRun, TimerStatus, CLOCK_SET_AFTER, COUNTDOWN_S, LATE_S,
+};
+use crate::settings::{parse_hhmm, LockMode, Settings, Wifi};
+use crate::util::{local_time, now_unix, read_json, write_json};
 
 /// Which stored data changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -39,6 +44,8 @@ pub enum Data {
     Media,
     /// Dial presets.
     Presets,
+    /// Timed brews (schedules or the armed run).
+    Timers,
 }
 
 /// Toast severity.
@@ -75,6 +82,8 @@ pub enum Event {
     Changed(Data),
     /// Lock the screen now (requested from the admin panel).
     LockNow,
+    /// The evening reminder: the next timed brew is within a day and not armed yet.
+    TimerReminder(TimerRun),
     /// A short message for the screen.
     Toast {
         /// Text.
@@ -184,6 +193,13 @@ pub struct App {
     pub presets: Mutex<PresetStore>,
     /// Screensaver media.
     pub media: MediaStore,
+    /// Timed brews.
+    pub timers: Mutex<ScheduleStore>,
+    /// When the last timer reminder was shown (once per evening).
+    reminded: Mutex<Option<u64>>,
+    /// The armed run whose countdown already woke the machine link.
+    warmed: Mutex<Option<u64>>,
+    stopping: AtomicBool,
     /// PIN throttles and web sessions.
     pub auth: Mutex<AuthState>,
     pub(crate) status: Mutex<MachineStatus>,
@@ -232,6 +248,10 @@ impl App {
             )),
             presets: Mutex::new(PresetStore::open(data_dir.join("presets.json"))),
             media,
+            timers: Mutex::new(ScheduleStore::open(data_dir.join("timers.json"))),
+            reminded: Mutex::new(None),
+            warmed: Mutex::new(None),
+            stopping: AtomicBool::new(false),
             auth: Mutex::new(AuthState::default()),
             status: Mutex::new(MachineStatus { simulator: settings.machine.simulator, ..MachineStatus::default() }),
             settings: Mutex::new(settings),
@@ -247,6 +267,12 @@ impl App {
             .stack_size(48 * 1024)
             .spawn(move || controller.run())
             .expect("spawn the machine thread");
+        let weak = Arc::downgrade(&app);
+        thread::Builder::new()
+            .name("xbloom-timers".into())
+            .stack_size(12 * 1024)
+            .spawn(move || timer_loop(weak))
+            .expect("spawn the timer thread");
         app
     }
 
@@ -436,19 +462,40 @@ impl App {
     /// `start: true` also starts it remotely — refused if the admin turned remote start off.
     /// `dose_g` brews it at a different dose with the same ratio.
     pub fn brew(&self, recipe_id: &str, start: bool, dose_g: Option<i32>) -> Result<(), String> {
-        if start && !self.settings().security.allow_remote_start {
-            return Err("Remote start is turned off — load the recipe and approve on the machine".into());
-        }
-        if self.machine_status().brew.as_ref().is_some_and(|b| !b.finished) {
-            return Err("A brew is already running".into());
-        }
+        self.brew_kind(recipe_id, start, dose_g, BrewKind::Recipe)
+    }
+
+    fn brew_kind(&self, recipe_id: &str, start: bool, dose_g: Option<i32>, kind: BrewKind) -> Result<(), String> {
+        self.check_can_run(start)?;
         let stored = self.recipes.lock().unwrap().get(recipe_id).ok_or("No such recipe")?;
         let recipe = match dose_g {
             Some(d) if d != stored.recipe.dose_g => stored.recipe.scaled_to_dose(d),
             _ => stored.recipe,
         };
         recipe.validate().map_err(|e| e.0)?;
-        self.send(Command::Brew { recipe: Box::new(recipe), recipe_id: Some(recipe_id.to_string()), start });
+        self.send(Command::Brew { recipe: Box::new(recipe), recipe_id: Some(recipe_id.to_string()), start, kind });
+        Ok(())
+    }
+
+    fn check_can_run(&self, start: bool) -> Result<(), String> {
+        if start && !self.settings().security.allow_remote_start {
+            return Err("Remote start is turned off — load the recipe and approve on the machine".into());
+        }
+        if self.machine_status().brew.as_ref().is_some_and(|b| !b.finished) {
+            return Err("A brew is already running".into());
+        }
+        Ok(())
+    }
+
+    /// Rinse the paper filter: hot water through the empty filter, grinder off (see
+    /// [`crate::settings::Rinse`]). Like a brew, `start: false` only loads it and you approve
+    /// on the machine; `start: true` starts it remotely (refused if remote start is off). Not
+    /// recorded in history.
+    pub fn rinse(&self, start: bool) -> Result<(), String> {
+        self.check_can_run(start)?;
+        let recipe = self.settings().rinse.recipe();
+        recipe.validate().map_err(|e| e.0)?;
+        self.send(Command::Brew { recipe: Box::new(recipe), recipe_id: None, start, kind: BrewKind::Rinse });
         Ok(())
     }
 
@@ -501,20 +548,33 @@ impl App {
         Ok(r)
     }
 
-    /// Replace a recipe.
+    /// Replace a recipe. If the recipe itself changed (not just its favourite, colour …), an
+    /// armed timer that brews it is disarmed: its checklist was confirmed for the old one.
     pub fn update_recipe(&self, id: &str, recipe: Recipe, meta: Option<RecipeMeta>) -> Result<StoredRecipe, String> {
-        let r = self.recipes.lock().unwrap().update(id, recipe, meta)?;
+        let (r, old) = {
+            let mut lib = self.recipes.lock().unwrap();
+            let old = lib.get(id).map(|s| s.recipe);
+            (lib.update(id, recipe, meta)?, old)
+        };
         self.emit(Event::Changed(Data::Recipes));
+        if old.as_ref() != Some(&r.recipe) && self.timers.lock().unwrap().disarm_recipe(id) {
+            self.toast("Recipe changed: arm its timer again at the machine", ToastKind::Info);
+            self.emit(Event::Changed(Data::Timers));
+        }
         Ok(r)
     }
 
-    /// Delete a recipe (and clear any dial slot that used it).
+    /// Delete a recipe (and clear any dial slot and timer that used it).
     pub fn delete_recipe(&self, id: &str) -> bool {
         let removed = self.recipes.lock().unwrap().delete(id);
         if removed {
             self.presets.lock().unwrap().forget_recipe(id);
+            let timers = self.timers.lock().unwrap().forget_recipe(id);
             self.emit(Event::Changed(Data::Recipes));
             self.emit(Event::Changed(Data::Presets));
+            if timers {
+                self.emit(Event::Changed(Data::Timers));
+            }
         }
         removed
     }
@@ -536,9 +596,196 @@ impl App {
         self.emit(Event::LockNow);
     }
 
-    /// Stop the machine thread (on shutdown).
+    /// Stop the machine and timer threads (on shutdown).
     pub fn shutdown(&self) {
+        self.stopping.store(true, Ordering::Release);
         self.send(Command::Shutdown);
+    }
+
+    // ── timed brews ───────────────────────────────────────────────────────────────────
+    //
+    // 🛑 A timer never brews on its own: each run is armed at the machine (the screen's
+    // checklist and hold gesture call `arm_next_timer`, which nothing on the network reaches),
+    // one arming covers one run, and the run counts down with a Cancel button first.
+
+    /// The schedules.
+    pub fn timer_list(&self) -> Vec<Schedule> {
+        self.timers.lock().unwrap().list()
+    }
+
+    /// Add a schedule.
+    pub fn add_timer(&self, input: ScheduleInput) -> Result<Schedule, String> {
+        self.check_timer_recipe(&input.recipe_id)?;
+        let s = self.timers.lock().unwrap().add(input, now_unix(), &local_time)?;
+        self.emit(Event::Changed(Data::Timers));
+        Ok(s)
+    }
+
+    /// Change a schedule (an armed run of it is disarmed if its time moved).
+    pub fn update_timer(&self, id: &str, input: ScheduleInput) -> Result<Schedule, String> {
+        self.check_timer_recipe(&input.recipe_id)?;
+        let (s, disarmed) = self.timers.lock().unwrap().update(id, input, now_unix(), &local_time)?;
+        if disarmed {
+            self.toast("Timer changed: arm it again at the machine", ToastKind::Info);
+        }
+        self.emit(Event::Changed(Data::Timers));
+        Ok(s)
+    }
+
+    /// Delete a schedule.
+    pub fn delete_timer(&self, id: &str) -> bool {
+        let removed = self.timers.lock().unwrap().delete(id);
+        if removed {
+            self.emit(Event::Changed(Data::Timers));
+        }
+        removed
+    }
+
+    fn check_timer_recipe(&self, recipe_id: &str) -> Result<(), String> {
+        self.recipes.lock().unwrap().get(recipe_id).map(|_| ()).ok_or_else(|| "No such recipe".into())
+    }
+
+    /// Where timed brews stand at `now`.
+    pub fn timer_status(&self, now: u64) -> TimerStatus {
+        let store = self.timers.lock().unwrap();
+        let armed = store.armed();
+        let run = match &armed {
+            Some(a) => store.get(&a.schedule_id).map(|s| (s.id, s.recipe_id, a.at, true)),
+            None => store.next_run(now, &local_time).map(|r| (r.schedule_id, r.recipe_id, r.at, false)),
+        };
+        drop(store);
+        let next = run.map(|(schedule_id, recipe_id, at, armed)| {
+            let recipe_name =
+                self.recipes.lock().unwrap().get(&recipe_id).map_or_else(|| "A recipe".into(), |r| r.recipe.name);
+            TimerRun { schedule_id, recipe_id, recipe_name, at, armed }
+        });
+        let countdown_s = armed
+            .as_ref()
+            .filter(|a| a.at <= now + COUNTDOWN_S)
+            .map(|a| a.at.saturating_sub(now))
+            .filter(|_| now >= CLOCK_SET_AFTER);
+        TimerStatus {
+            next,
+            countdown_s,
+            clock_set: now >= CLOCK_SET_AFTER,
+            remote_start: self.settings().security.allow_remote_start,
+        }
+    }
+
+    /// 🔥 Arm the next timed run. **Only the screen calls this**, after its checklist (beans,
+    /// filter and dripper, cup, water) and the hold gesture: there is deliberately no admin
+    /// API route to it.
+    pub fn arm_next_timer(&self, now: u64) -> Result<TimerRun, String> {
+        if now < CLOCK_SET_AFTER {
+            return Err("The clock isn't set yet: it syncs once the screen is on Wi-Fi".into());
+        }
+        if !self.settings().security.allow_remote_start {
+            return Err("Timers start the machine from the screen: turn on remote start in Settings".into());
+        }
+        let run = {
+            let store = self.timers.lock().unwrap();
+            if store.armed().is_some() {
+                return Err("A timer is already armed".into());
+            }
+            store.next_run(now, &local_time).ok_or("No timer is coming up")?
+        };
+        if run.at < now + COUNTDOWN_S {
+            return Err("That timer is less than a minute away".into());
+        }
+        let recipe_name = self.recipes.lock().unwrap().get(&run.recipe_id).ok_or("No such recipe")?.recipe.name;
+        self.timers.lock().unwrap().arm(&run, now);
+        log::info!("timer: armed '{recipe_name}' for {}", run.at);
+        self.emit(Event::Changed(Data::Timers));
+        Ok(TimerRun { schedule_id: run.schedule_id, recipe_id: run.recipe_id, recipe_name, at: run.at, armed: true })
+    }
+
+    /// Disarm the armed run (screen Cancel, or the admin panel). Returns whether one was armed.
+    pub fn disarm_timer(&self) -> bool {
+        let was = self.timers.lock().unwrap().disarm();
+        if was.is_some() {
+            self.emit(Event::Changed(Data::Timers));
+        }
+        was.is_some()
+    }
+
+    /// One scheduler step at `now` (the timer thread calls this every second): start a due
+    /// armed run, drop a late or orphaned one, switch off past one-off timers, and show the
+    /// evening reminder.
+    pub fn scheduler_tick(&self, now: u64) {
+        if now < CLOCK_SET_AFTER {
+            return;
+        }
+        let armed = self.timers.lock().unwrap().armed();
+        if let Some(a) = armed {
+            let schedule = self.timers.lock().unwrap().get(&a.schedule_id).filter(|s| s.enabled);
+            match schedule {
+                None => {
+                    self.disarm_timer();
+                }
+                Some(s) if now >= a.at => {
+                    {
+                        let mut store = self.timers.lock().unwrap();
+                        store.disarm();
+                        store.finish_once(&s.id);
+                    }
+                    self.emit(Event::Changed(Data::Timers));
+                    if now - a.at > LATE_S {
+                        log::warn!("timer: missed the run at {} (now {now})", a.at);
+                        self.toast("A timed brew was missed while the screen was off", ToastKind::Warning);
+                    } else if let Err(e) = self.brew_kind(&s.recipe_id, true, None, BrewKind::Scheduled) {
+                        log::warn!("timer: skipped: {e}");
+                        self.toast(&format!("Timed brew skipped: {e}"), ToastKind::Error);
+                    } else {
+                        log::info!("timer: started the run at {}", a.at);
+                    }
+                }
+                Some(_) if a.at <= now + COUNTDOWN_S => {
+                    // The countdown is on: have the machine link ready when it ends.
+                    let mut warmed = self.warmed.lock().unwrap();
+                    if *warmed != Some(a.at) {
+                        *warmed = Some(a.at);
+                        if self.machine_status().link != Link::Connected {
+                            self.connect(None);
+                        }
+                    }
+                }
+                Some(_) => {}
+            }
+        }
+        if self.timers.lock().unwrap().expire_once(now) {
+            self.emit(Event::Changed(Data::Timers));
+        }
+        self.maybe_remind(now);
+    }
+
+    fn maybe_remind(&self, now: u64) {
+        let Some(at_minute) = parse_hhmm(&self.settings().timers.remind_at) else { return };
+        let lt = local_time(now as i64);
+        if lt.hour * 60 + lt.minute != at_minute {
+            return;
+        }
+        let mut reminded = self.reminded.lock().unwrap();
+        if reminded.is_some_and(|t| now < t + 3600) {
+            return;
+        }
+        let status = self.timer_status(now);
+        if let Some(run) = status.next.filter(|r| !r.armed && r.at <= now + 24 * 3600) {
+            *reminded = Some(now);
+            drop(reminded);
+            self.emit(Event::TimerReminder(run));
+        }
+    }
+}
+
+/// The timer thread: a scheduler step every second until the app shuts down.
+fn timer_loop(app: Weak<App>) {
+    loop {
+        thread::sleep(Duration::from_secs(1));
+        let Some(app) = app.upgrade() else { return };
+        if app.stopping.load(Ordering::Acquire) {
+            return;
+        }
+        app.scheduler_tick(now_unix());
     }
 }
 
@@ -624,6 +871,98 @@ pub(crate) mod tests {
         app.update_settings(|s| s.security.allow_remote_start = false);
         let id = app.recipes.lock().unwrap().list()[0].id.clone();
         assert!(app.brew(&id, true, None).unwrap_err().contains("Remote start is turned off"));
+        app.shutdown();
+    }
+
+    /// A daily timer two hours from now, for `recipe`.
+    fn timer_in_two_hours(app: &App, recipe: &str) -> Schedule {
+        let lt = local_time(now_unix() as i64);
+        let time = crate::settings::hhmm((lt.hour * 60 + lt.minute + 120) % 1440);
+        app.add_timer(ScheduleInput { recipe_id: recipe.into(), time, days: [true; 7], enabled: true }).unwrap()
+    }
+
+    #[test]
+    fn a_rinse_runs_without_grinding_and_isnt_recorded() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = test_app(dir.path(), true);
+        let finished = Arc::new(AtomicBool::new(false));
+        let f2 = Arc::clone(&finished);
+        app.subscribe(move |ev| {
+            if let Event::BrewFinished { outcome, entry } = ev {
+                assert_eq!((outcome.as_str(), entry.is_none()), ("completed", true));
+                f2.store(true, Ordering::SeqCst);
+            }
+        });
+        wait_until("connected", || app.machine_status().link == crate::controller::Link::Connected);
+        app.update_settings(|s| s.rinse.ml = 60);
+        app.rinse(true).unwrap();
+        wait_until("rinse running", || app.machine_status().brew.is_some_and(|b| b.kind == BrewKind::Rinse));
+        wait_until("rinse finished", || finished.load(Ordering::SeqCst));
+        assert!(app.history.lock().unwrap().list().is_empty());
+        // Like a brew, it can't start remotely when remote start is off.
+        app.update_settings(|s| s.security.allow_remote_start = false);
+        assert!(app.rinse(true).is_err());
+        app.shutdown();
+    }
+
+    #[test]
+    fn an_armed_timer_counts_down_then_brews_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = test_app(dir.path(), true);
+        wait_until("connected", || app.machine_status().link == crate::controller::Link::Connected);
+        let id = app.recipes.lock().unwrap().list()[0].id.clone();
+        let t = timer_in_two_hours(&app, &id);
+        let now = now_unix();
+        let status = app.timer_status(now);
+        let run = status.next.clone().unwrap();
+        assert!(!run.armed && status.clock_set && status.remote_start && status.countdown_s.is_none());
+        // Not armed: its time comes and goes without a brew.
+        app.scheduler_tick(run.at);
+        assert!(app.machine_status().brew.is_none());
+        // Armed at the machine: a countdown in the last minute, then the brew.
+        let armed = app.arm_next_timer(now).unwrap();
+        assert_eq!((armed.schedule_id.as_str(), armed.at, armed.armed), (t.id.as_str(), run.at, true));
+        assert!(app.arm_next_timer(now).is_err(), "one run at a time");
+        assert_eq!(app.timer_status(run.at - 30).countdown_s, Some(30));
+        app.scheduler_tick(run.at);
+        wait_until("scheduled brew", || app.machine_status().brew.is_some_and(|b| b.kind == BrewKind::Scheduled));
+        wait_until("brew finished", || app.machine_status().brew.is_some_and(|b| b.finished));
+        assert_eq!(app.history.lock().unwrap().list().len(), 1);
+        // The arming was used up: the next day's run isn't armed.
+        let after = app.timer_status(run.at + 1).next.unwrap();
+        assert!(!after.armed && after.at > run.at);
+        app.shutdown();
+    }
+
+    #[test]
+    fn a_late_or_disallowed_timer_does_not_brew() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = test_app(dir.path(), true);
+        let id = app.recipes.lock().unwrap().list()[0].id.clone();
+        timer_in_two_hours(&app, &id);
+        let now = now_unix();
+        let run = app.arm_next_timer(now).unwrap();
+        // The screen was off past the run: dropped, not brewed late.
+        app.scheduler_tick(run.at + LATE_S + 1);
+        assert!(app.timers.lock().unwrap().armed().is_none());
+        assert!(app.machine_status().brew.is_none());
+        // Timers need remote start.
+        app.update_settings(|s| s.security.allow_remote_start = false);
+        assert!(app.arm_next_timer(now).unwrap_err().contains("remote start"));
+        // Editing the recipe disarms its timer; touching only its favourite flag doesn't.
+        app.update_settings(|s| s.security.allow_remote_start = true);
+        app.arm_next_timer(now).unwrap();
+        let stored = app.recipes.lock().unwrap().get(&id).unwrap();
+        let meta = RecipeMeta { favorite: !stored.meta.favorite, ..stored.meta.clone() };
+        app.update_recipe(&id, stored.recipe.clone(), Some(meta)).unwrap();
+        assert!(app.timers.lock().unwrap().armed().is_some());
+        let mut changed = stored.recipe.clone();
+        changed.pours[0].temp_c -= 1;
+        app.update_recipe(&id, changed, None).unwrap();
+        assert!(app.timers.lock().unwrap().armed().is_none());
+        // Deleting the recipe deletes its timer.
+        app.delete_recipe(&id);
+        assert!(app.timer_list().is_empty());
         app.shutdown();
     }
 

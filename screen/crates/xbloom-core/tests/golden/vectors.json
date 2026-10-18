@@ -1935,6 +1935,180 @@
    }
   },
   {
+   "name": "example-tea-black",
+   "yaml": "# Example tea: a black tea (breakfast style) through the dripper, grinder off. Put\n# about 5 g of leaves in a paper filter. 250 ml in total (60 + 95 + 95) at 95 \u00b0C.\n# dose_g is 10 only so the brew ratio fits the machine's 1:25.5 maximum (grind 0).\nname: Black Tea\ndose_g: 10\ngrind: 0\nkind: tea\ndripper: Omni\nwater_ml: 250\nnote: About 5 g of black tea leaves in a paper filter. Longer steeps for a fuller cup. The grinder stays off.\npours:\n  - {label: Wake,    ml: 60, temp_c: 95, pattern: center, pause_s: 40, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 1, ml: 95, temp_c: 95, pattern: center, pause_s: 60, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 2, ml: 95, temp_c: 95, pattern: center, pause_s: 40, rpm: 0, flow_ml_s: 3.0}\n",
+   "valid": true,
+   "total_water_ml": 250,
+   "effective_ratio": 25.0,
+   "load_frames": [
+    "580101a41f1400000001b900000001000000bdd1",
+    "580101a61f180000000100000000000000000a0000000793",
+    "580101a81f14000000010000dc420000b44221a1",
+    "580101441f2700000001183c5f0001d800001e5f5f0001c400001e5f5f0001d800001efefaae20"
+   ],
+   "to_dict": {
+    "name": "Black Tea",
+    "dose_g": 10,
+    "grind": 0,
+    "stage_temps": [
+     110.0,
+     90.0
+    ],
+    "kind": "tea",
+    "dripper": "Omni",
+    "water_ml": 250,
+    "note": "About 5 g of black tea leaves in a paper filter. Longer steeps for a fuller cup. The grinder stays off.",
+    "pours": [
+     {
+      "label": "Wake",
+      "ml": 60,
+      "temp_c": 95,
+      "pattern": "center",
+      "pause_s": 40,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 1",
+      "ml": 95,
+      "temp_c": 95,
+      "pattern": "center",
+      "pause_s": 60,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 2",
+      "ml": 95,
+      "temp_c": 95,
+      "pattern": "center",
+      "pause_s": 40,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "example-tea-green",
+   "yaml": "# Example tea: a green tea (sencha style) through the dripper, grinder off. Put about\n# 4 g of leaves in a paper filter. 250 ml in total (60 + 95 + 95) at 80 \u00b0C.\n# dose_g is 10 only so the brew ratio fits the machine's 1:25.5 maximum: with grind 0\n# nothing is ground, so the dose is bookkeeping.\nname: Green Tea\ndose_g: 10\ngrind: 0\nkind: tea\ndripper: Omni\nwater_ml: 250\nnote: About 4 g of green tea leaves in a paper filter. Cooler water keeps it sweet. The grinder stays off.\npours:\n  - {label: Wake,    ml: 60, temp_c: 80, pattern: center, pause_s: 30, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 1, ml: 95, temp_c: 80, pattern: center, pause_s: 45, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 2, ml: 95, temp_c: 80, pattern: center, pause_s: 30, rpm: 0, flow_ml_s: 3.0}\n",
+   "valid": true,
+   "total_water_ml": 250,
+   "effective_ratio": 25.0,
+   "load_frames": [
+    "580101a41f1400000001b900000001000000bdd1",
+    "580101a61f180000000100000000000000000a0000000793",
+    "580101a81f14000000010000dc420000b44221a1",
+    "580101441f2700000001183c500001e200001e5f500001d300001e5f500001e200001efefa6d4f"
+   ],
+   "to_dict": {
+    "name": "Green Tea",
+    "dose_g": 10,
+    "grind": 0,
+    "stage_temps": [
+     110.0,
+     90.0
+    ],
+    "kind": "tea",
+    "dripper": "Omni",
+    "water_ml": 250,
+    "note": "About 4 g of green tea leaves in a paper filter. Cooler water keeps it sweet. The grinder stays off.",
+    "pours": [
+     {
+      "label": "Wake",
+      "ml": 60,
+      "temp_c": 80,
+      "pattern": "center",
+      "pause_s": 30,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 1",
+      "ml": 95,
+      "temp_c": 80,
+      "pattern": "center",
+      "pause_s": 45,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 2",
+      "ml": 95,
+      "temp_c": 80,
+      "pattern": "center",
+      "pause_s": 30,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "example-tea-oolong",
+   "yaml": "# Example tea: an oolong through the dripper, grinder off. Put about 5 g of leaves in\n# a paper filter. 250 ml in total (60 + 95 + 95) at 90 \u00b0C.\n# dose_g is 10 only so the brew ratio fits the machine's 1:25.5 maximum (grind 0).\nname: Oolong Tea\ndose_g: 10\ngrind: 0\nkind: tea\ndripper: Omni\nwater_ml: 250\nnote: About 5 g of rolled oolong in a paper filter. The first pour opens the leaves. The grinder stays off.\npours:\n  - {label: Wake,    ml: 60, temp_c: 90, pattern: center, pause_s: 30, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 1, ml: 95, temp_c: 90, pattern: center, pause_s: 50, rpm: 0, flow_ml_s: 3.0}\n  - {label: Steep 2, ml: 95, temp_c: 90, pattern: center, pause_s: 35, rpm: 0, flow_ml_s: 3.0}\n",
+   "valid": true,
+   "total_water_ml": 250,
+   "effective_ratio": 25.0,
+   "load_frames": [
+    "580101a41f1400000001b900000001000000bdd1",
+    "580101a61f180000000100000000000000000a0000000793",
+    "580101a81f14000000010000dc420000b44221a1",
+    "580101441f2700000001183c5a0001e200001e5f5a0001ce00001e5f5a0001dd00001efefaab6e"
+   ],
+   "to_dict": {
+    "name": "Oolong Tea",
+    "dose_g": 10,
+    "grind": 0,
+    "stage_temps": [
+     110.0,
+     90.0
+    ],
+    "kind": "tea",
+    "dripper": "Omni",
+    "water_ml": 250,
+    "note": "About 5 g of rolled oolong in a paper filter. The first pour opens the leaves. The grinder stays off.",
+    "pours": [
+     {
+      "label": "Wake",
+      "ml": 60,
+      "temp_c": 90,
+      "pattern": "center",
+      "pause_s": 30,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 1",
+      "ml": 95,
+      "temp_c": 90,
+      "pattern": "center",
+      "pause_s": 50,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "label": "Steep 2",
+      "ml": 95,
+      "temp_c": 90,
+      "pattern": "center",
+      "pause_s": 35,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     }
+    ]
+   }
+  },
+  {
    "name": "example-washed",
    "yaml": "# Example recipe: a generic washed coffee (e.g. a Colombia or Ethiopia washed).\n# A clean 1:15 brew with an agitated bloom and two even spiral pours.\n#\n# dose_g 16 * ratio 15 = 240 ml total water, which matches the sum of pours\n# (45 + 100 + 95 = 240), so the optional ratio check passes.\nname: Example Washed\ndose_g: 16\ngrind: 62\nratio: 15\nstage_temps: [110.0, 90.0]\n# Optional brew-level metadata (informational \u2014 never sent to the machine).\nkind: custom\ndripper: Omni\nwater_ml: 240\ntime: \"~2:30\"\nnote: Clean and balanced. Agitate the bloom, then two even spiral pours.\npours:\n  - {label: Bloom,  ml: 45,  temp_c: 93, pattern: spiral, agitation: true, pause_s: 40, rpm: 100, flow_ml_s: 3.0}\n  - {label: Pour 1, ml: 100, temp_c: 91, pattern: spiral, pause_s: 10, rpm: 100, flow_ml_s: 3.2}\n  - {label: Pour 2, ml: 95,  temp_c: 90, pattern: spiral, pause_s: 5,  rpm: 100, flow_ml_s: 3.2}\n",
    "valid": true,

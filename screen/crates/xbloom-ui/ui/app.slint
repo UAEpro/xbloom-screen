@@ -13,11 +13,15 @@ import { HistoryPage } from "pages/history.slint";
 import { PresetsPage } from "pages/presets.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SetupPage } from "pages/setup.slint";
+import { TimersPage } from "pages/timers.slint";
 import { LockScreen, Screensaver, Sleep } from "pages/lock.slint";
-import { PinOverlay, CancelBrewOverlay, MachineSheet, PickRecipeOverlay } from "overlays.slint";
+import {
+    PinOverlay, CancelBrewOverlay, MachineSheet, PickRecipeOverlay, RinseOverlay, ArmTimerOverlay,
+    TimerReminderOverlay, EditTimerOverlay, TimerCountdown,
+} from "overlays.slint";
 
 export { AppState, Theme, Layout, Page, Overlay }
-export { LinkState, RecipeCard, PourInfo, BrewInfo, HistoryRow, SlotRow, ScanRow, MediaRow, ToastInfo } from "state.slint";
+export { LinkState, RecipeCard, PourInfo, BrewInfo, HistoryRow, SlotRow, ScanRow, MediaRow, ToastInfo, TimerRow, TimerEdit } from "state.slint";
 
 // The current page, in the area the navigation leaves free.
 component PageHost inherits Rectangle {
@@ -29,6 +33,7 @@ component PageHost inherits Rectangle {
     if AppState.page == Page.history: HistoryPage {}
     if AppState.page == Page.presets: PresetsPage {}
     if AppState.page == Page.settings: SettingsPage {}
+    if AppState.page == Page.timers: TimersPage {}
 }
 
 export component AppWindow inherits Window {
@@ -64,6 +69,10 @@ export component AppWindow inherits Window {
     if AppState.overlay == Overlay.cancel-brew: CancelBrewOverlay {}
     if AppState.overlay == Overlay.machine: MachineSheet {}
     if AppState.overlay == Overlay.pick-recipe: PickRecipeOverlay {}
+    if AppState.overlay == Overlay.rinse: RinseOverlay {}
+    if AppState.overlay == Overlay.arm-timer: ArmTimerOverlay {}
+    if AppState.overlay == Overlay.timer-reminder: TimerReminderOverlay {}
+    if AppState.overlay == Overlay.edit-timer: EditTimerOverlay {}
 
     ToastView {
         limit: root.width - 32px;
@@ -75,6 +84,8 @@ export component AppWindow inherits Window {
     if AppState.locked && !AppState.saver-active: LockScreen {}
     if AppState.saver-active: Screensaver {}
     if AppState.asleep: Sleep {}
+    // An armed timer's last minute shows over everything, so it can always be cancelled.
+    if AppState.timer-countdown >= 0: TimerCountdown {}
 
     // Microcontroller builds embed glyphs only for ASCII and the characters that appear in
     // these .slint files. This invisible line adds Latin-1 and common typography, so recipe

@@ -18,6 +18,7 @@ hmac = "0.13"
 pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 getrandom = "0.4"
 zune-jpeg = "0.4"   # SIMD paths are arch-gated, so this is fine on Xtensa too
+libc = "0.2"
 
 [build-dependencies]
 flate2 = "1"

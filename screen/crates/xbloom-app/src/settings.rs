@@ -1,4 +1,5 @@
-//! Device settings: appearance, screensaver, security/lock, machine pairing, Wi-Fi.
+//! Device settings: appearance, screensaver, security/lock, machine pairing, Wi-Fi, the
+//! rinse button and timed brews.
 //!
 //! Persisted as `settings.json`. Every field has a default (`#[serde(default)]`), so a file
 //! from an older version loads cleanly and unknown future fields are ignored.
@@ -8,6 +9,8 @@
 //! (they have their own, current-PIN-gated endpoint).
 
 use serde::{Deserialize, Serialize};
+use xbloom_core::recipe::{Pattern, Pour};
+use xbloom_core::Recipe;
 
 use crate::auth::PinHash;
 
@@ -173,6 +176,83 @@ impl Default for MachineSettings {
     }
 }
 
+/// The rinse-filter button: hot water through the empty paper filter, grinder off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Rinse {
+    /// Water, ml (30–250).
+    pub ml: i32,
+    /// Temperature, °C (40–95).
+    pub temp_c: i32,
+}
+
+impl Default for Rinse {
+    fn default() -> Self {
+        Self { ml: 100, temp_c: 95 }
+    }
+}
+
+impl Rinse {
+    /// The rinse as something the machine can run: grinder off, two spiral pours (a recipe
+    /// needs at least two) that wet the whole paper, no pauses. The dose only keeps the brew
+    /// ratio inside the machine's 1:25.5 limit; nothing is ground.
+    pub fn recipe(&self) -> Recipe {
+        let pour = |ml| Pour {
+            label: Some("Rinse".into()),
+            ml,
+            temp_c: self.temp_c,
+            pattern: Pattern::Spiral,
+            pause_s: 0,
+            rpm: 80,
+            flow_ml_s: 3.5,
+            agitation: false,
+        };
+        let first = self.ml / 2;
+        Recipe {
+            name: "Rinse".into(),
+            dose_g: ((self.ml + 24) / 25).clamp(1, 18),
+            grind: 0,
+            ratio: None,
+            stage_temps: [110.0, 90.0],
+            kind: Some("rinse".into()),
+            dripper: None,
+            water_ml: None,
+            hot_water_ml: None,
+            ice_g: None,
+            time: None,
+            note: None,
+            pours: vec![pour(first), pour(self.ml - first)],
+        }
+    }
+}
+
+/// Timed brews.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Timers {
+    /// Local time ("21:00") at which the screen reminds you to prepare and arm the next timed
+    /// brew if it is within a day and not armed yet; empty = no reminder.
+    pub remind_at: String,
+}
+
+impl Default for Timers {
+    fn default() -> Self {
+        Self { remind_at: "21:00".into() }
+    }
+}
+
+/// Minutes after midnight for a `HH:MM` local time.
+pub fn parse_hhmm(s: &str) -> Option<u32> {
+    let (h, m) = s.trim().split_once(':')?;
+    let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
+    (h < 24 && m < 60).then_some(h * 60 + m)
+}
+
+/// `HH:MM` for minutes after midnight.
+pub fn hhmm(minutes: u32) -> String {
+    format!("{:02}:{:02}", minutes / 60 % 24, minutes % 60)
+}
+
 /// Wi-Fi credentials (ESP32 only; a Raspberry Pi uses the OS network config).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -203,6 +283,10 @@ pub struct Settings {
     pub machine: MachineSettings,
     /// Wi-Fi (ESP32).
     pub wifi: Wifi,
+    /// The rinse-filter button.
+    pub rinse: Rinse,
+    /// Timed brews.
+    pub timers: Timers,
 }
 
 impl Default for Settings {
@@ -216,6 +300,8 @@ impl Default for Settings {
             security: Security::default(),
             machine: MachineSettings::default(),
             wifi: Wifi::default(),
+            rinse: Rinse::default(),
+            timers: Timers::default(),
         }
     }
 }
@@ -257,6 +343,11 @@ impl Settings {
         let sec = &mut self.security;
         sec.auto_lock_s = sec.auto_lock_s.clamp(30, 3600);
         sec.hold_to_brew_ms = sec.hold_to_brew_ms.clamp(500, 3000);
+        self.rinse.ml = self.rinse.ml.clamp(30, 250);
+        self.rinse.temp_c = self.rinse.temp_c.clamp(40, 95);
+        let remind = self.timers.remind_at.trim();
+        self.timers.remind_at =
+            if remind.is_empty() { String::new() } else { parse_hhmm(remind).map(hhmm).unwrap_or_default() };
         if self.device_name.trim().is_empty() {
             self.device_name = Settings::default().device_name;
         }
@@ -317,6 +408,12 @@ impl Settings {
             if let Some(pw) = w.password {
                 self.wifi.password = pw;
             }
+        }
+        if let Some(v) = patch.rinse {
+            self.rinse = v;
+        }
+        if let Some(v) = patch.timers {
+            self.timers = v;
         }
         self.sanitize();
         *self != before
@@ -384,6 +481,10 @@ pub struct SettingsPatch {
     pub machine: Option<MachinePatch>,
     /// Wi-Fi.
     pub wifi: Option<WifiPatch>,
+    /// The rinse-filter button (whole section).
+    pub rinse: Option<Rinse>,
+    /// Timed brews (whole section).
+    pub timers: Option<Timers>,
 }
 
 #[cfg(test)]
@@ -444,6 +545,34 @@ mod tests {
         s.timezone = "Europe/Zürich; rm".into();
         s.sanitize();
         assert_eq!(s.timezone, "UTC0");
+    }
+
+    #[test]
+    fn rinse_and_reminder_are_kept_valid() {
+        let mut s = Settings {
+            rinse: Rinse { ml: 5000, temp_c: 20 },
+            timers: Timers { remind_at: " 7:5 ".into() },
+            ..Settings::default()
+        };
+        s.sanitize();
+        assert_eq!((s.rinse.ml, s.rinse.temp_c, s.timers.remind_at.as_str()), (250, 40, "07:05"));
+        s.timers.remind_at = "25:00".into();
+        s.sanitize();
+        assert_eq!(s.timers.remind_at, "");
+        assert_eq!((parse_hhmm("23:59"), parse_hhmm("07:60"), parse_hhmm("7")), (Some(1439), None, None));
+        assert_eq!(hhmm(425), "07:05");
+    }
+
+    #[test]
+    fn every_rinse_is_a_valid_no_grind_run() {
+        for ml in [30, 31, 100, 249, 250] {
+            for temp_c in [40, 95] {
+                let r = Rinse { ml, temp_c }.recipe();
+                r.validate().unwrap_or_else(|e| panic!("{ml} ml at {temp_c}°: {e}"));
+                assert!(r.no_grind());
+                assert_eq!(r.total_water_ml(), ml);
+            }
+        }
     }
 
     #[test]

@@ -59,7 +59,8 @@ export component Logo inherits Rectangle {
 
 // Landscape navigation: a rail down the left edge (icon-only on short screens).
 export component NavRail inherits Rectangle {
-    property <length> item: Layout.rail-labels ? 64px : 46px;
+    // Five items and the lock button fit down to 272 px tall.
+    property <length> item: Layout.rail-labels ? 64px : Layout.height < 320px ? 40px : 46px;
     width: Layout.rail-width;
     background: Theme.surface;
     Rectangle {
@@ -68,9 +69,9 @@ export component NavRail inherits Rectangle {
         background: Theme.border;
     }
     VerticalLayout {
-        padding-top: Layout.rail-logo ? 16px : 10px;
+        padding-top: Layout.rail-logo ? 16px : Layout.height < 320px ? 6px : 10px;
         padding-bottom: 16px;
-        spacing: Layout.rail-labels ? 8px : 6px;
+        spacing: Layout.rail-labels ? 8px : Layout.height < 320px ? 3px : 6px;
         alignment: start;
         if Layout.rail-logo: Logo { x: (parent.width - self.width) / 2; }
         if Layout.rail-logo: Rectangle { height: 14px; }
@@ -83,6 +84,16 @@ export component NavRail inherits Rectangle {
             label: "Brew";
             active: AppState.page == Page.home || AppState.page == Page.recipe || AppState.page == Page.brewing;
             clicked => { AppState.navigate(Page.home); }
+        }
+        NavItem {
+            x: (parent.width - self.width) / 2;
+            width: root.item;
+            height: root.item;
+            show-label: Layout.rail-labels;
+            icon: AppState.timer-armed ? Icons.alarm-on : Icons.alarm;
+            label: "Timers";
+            active: AppState.page == Page.timers;
+            clicked => { AppState.navigate(Page.timers); }
         }
         NavItem {
             x: (parent.width - self.width) / 2;
@@ -117,8 +128,8 @@ export component NavRail inherits Rectangle {
     }
     if AppState.lock-mode > 0: IconButton {
         x: (parent.width - self.width) / 2;
-        y: parent.height - self.height - (Layout.rail-labels ? 18px : 10px);
-        size: Layout.rail-labels ? 48px : 40px;
+        y: parent.height - self.height - (Layout.rail-labels ? 18px : Layout.height < 320px ? 6px : 10px);
+        size: Layout.rail-labels ? 48px : Layout.height < 320px ? 36px : 40px;
         icon: Icons.lock;
         tint: Theme.text-2;
         fill: Theme.surface-2;
@@ -146,6 +157,13 @@ export component TabBar inherits Rectangle {
             label: "Brew";
             active: AppState.page == Page.home || AppState.page == Page.recipe || AppState.page == Page.brewing;
             clicked => { AppState.navigate(Page.home); }
+        }
+        NavItem {
+            horizontal-stretch: 1;
+            icon: AppState.timer-armed ? Icons.alarm-on : Icons.alarm;
+            label: "Timers";
+            active: AppState.page == Page.timers;
+            clicked => { AppState.navigate(Page.timers); }
         }
         NavItem {
             horizontal-stretch: 1;
@@ -181,6 +199,8 @@ export component Header inherits HorizontalLayout {
     in property <string> title;
     in property <string> subtitle;
     in property <bool> show-back: false;
+    // The machine pill shrinks to its icon when the header runs out of room.
+    in property <bool> compact-pill: Layout.content-width < 440px;
     callback back();
     height: Layout.header-height;
     padding-left: Layout.pad-left;
@@ -210,9 +230,11 @@ export component Header inherits HorizontalLayout {
             overflow: elide;
         }
     }
+    // Page actions (icon buttons, chips) go here, before the machine pill.
+    @children
     StatusPill {
         y: (parent.height - self.height) / 2;
-        compact: Layout.content-width < 440px;
+        compact: root.compact-pill;
         clicked => { AppState.overlay = Overlay.machine; }
     }
     Text {

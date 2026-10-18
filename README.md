@@ -32,8 +32,9 @@ documented protocol so others can build on it.
 > 📟 **Want a touchscreen next to the machine?** **[xBloom Screen](screen/README.md)** is a
 > standalone controller for a **Raspberry Pi with a touchscreen** (any size from 480 × 272,
 > landscape or portrait) or an **ESP32-S3 touch display** (experimental). It has a recipe
-> library, live brew view, dial presets, a PIN lock, a video screensaver and a web admin
-> panel for your phone. It is written in Rust and Slint, and uses the same protocol with
+> library for coffee and tea, live brew view, a rinse-the-filter button, timers you arm at
+> the machine, dial presets, a PIN lock, a video screensaver and a web admin panel for your
+> phone. It is written in Rust and Slint, and uses the same protocol with
 > the same load-only safety model. Builds are on the
 > [releases page](https://github.com/uaepro/xbloom-screen/releases).
 
@@ -416,7 +417,7 @@ but are **never sent to the machine** and are **not** range-checked against
 hardware limits:
 
 ```yaml
-kind: custom          # recipe kind / preset base (custom, medium-auto, …)
+kind: custom          # recipe kind / preset base (custom, medium-auto, …); "tea" for tea
 dripper: Omni         # the dripper/brewer used
 water_ml: 240         # total brew water (may exceed Σ pours for bypass/iced brews)
 hot_water_ml: 150     # iced: hot water poured over ice
@@ -429,6 +430,12 @@ pours:
 
 Each pour may also carry a `label` (e.g. `Bloom`, `Pour 1`). All of these are
 optional; omit them and the recipe behaves exactly as before.
+
+**Tea** is brewed the same way with the grinder off: `grind: 0`, the leaves in a paper
+filter, and `kind: tea` so a UI can tell it apart (the [xBloom Screen](screen/README.md)
+does). `dose_g` still has to keep Σ pours ÷ dose within the 1:25.5 ratio limit, but nothing
+is ground, so it is only bookkeeping. See `recipes/example-tea-green.yaml`,
+`example-tea-black.yaml` and `example-tea-oolong.yaml`.
 
 Validation rejects: fewer than two pours (you need at least a bloom and a first
 pour), an unknown `pattern`/`agitation` combo, out-of-range values, and — if a

@@ -10,6 +10,47 @@ pub fn now_unix() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
+/// A broken-down local time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalTime {
+    /// 0–23.
+    pub hour: u32,
+    /// 0–59.
+    pub minute: u32,
+    /// 0–60.
+    pub second: u32,
+    /// 0 = Sunday.
+    pub weekday: u32,
+    /// 1–31.
+    pub day: u32,
+    /// 0 = January.
+    pub month: u32,
+    /// e.g. 2026.
+    pub year: i32,
+}
+
+/// Local wall-clock time for a Unix timestamp, via the C library's `localtime_r`: glibc reads
+/// the system zone on the Pi; on the ESP32 the firmware sets the POSIX `TZ` variable from the
+/// settings.
+pub fn local_time(ts: i64) -> LocalTime {
+    let t = ts as libc::time_t;
+    // SAFETY: `tm` is plain data; localtime_r writes it and doesn't keep the pointers.
+    let tm = unsafe {
+        let mut tm: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&t, &mut tm);
+        tm
+    };
+    LocalTime {
+        hour: tm.tm_hour as u32,
+        minute: tm.tm_min as u32,
+        second: tm.tm_sec as u32,
+        weekday: tm.tm_wday as u32,
+        day: tm.tm_mday as u32,
+        month: tm.tm_mon as u32,
+        year: tm.tm_year + 1900,
+    }
+}
+
 /// `n` random bytes as lower-case hex (OS / hardware RNG).
 pub fn random_hex(n: usize) -> String {
     let mut buf = vec![0u8; n];

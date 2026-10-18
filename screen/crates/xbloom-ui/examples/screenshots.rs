@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use slint::{ComponentHandle, Model};
+use xbloom_app::schedule::ScheduleInput;
 use xbloom_app::settings::{LockMode, ScreensaverMode, Settings};
 use xbloom_app::{App, Link, PlatformInfo, VideoProfile};
 use xbloom_core::sim::{SimConfig, SimTransport};
@@ -159,6 +160,64 @@ fn main() {
         shot.pump(Duration::from_millis(500));
         snap(&format!("brew-done-{sfx}"));
         g.invoke_brew_dismiss();
+
+        // Tea: the home filter and a tea recipe. Then the rinse sheet.
+        g.invoke_set_recipe_filter(2);
+        shot.pump(Duration::from_millis(300));
+        snap(&format!("home-tea-{sfx}"));
+        let tea = g.get_home_recipes().iter().next().unwrap().id.to_string();
+        g.invoke_open_recipe(tea.into());
+        shot.pump(Duration::from_millis(300));
+        snap(&format!("recipe-tea-{sfx}"));
+        g.invoke_set_recipe_filter(0);
+        g.set_page(Page::Home);
+        g.set_overlay(Overlay::Rinse);
+        shot.pump(Duration::from_millis(200));
+        snap(&format!("rinse-{sfx}"));
+        g.set_overlay(Overlay::None);
+
+        // Timers: one on weekdays at 07:00 and a daily one two hours from now (the next run).
+        if app.timer_list().is_empty() {
+            let ids: Vec<String> = g.get_recipes().iter().map(|r| r.id.to_string()).collect();
+            let weekdays = [true, true, true, true, true, false, false];
+            let lt = xbloom_app::util::local_time(xbloom_app::util::now_unix() as i64);
+            let soon = xbloom_app::settings::hhmm((lt.hour * 60 + lt.minute + 120) % 1440);
+            for (recipe, time, days) in [(&ids[0], "07:00".to_string(), weekdays), (&ids[1], soon, [true; 7])] {
+                app.add_timer(ScheduleInput { recipe_id: recipe.clone(), time, days, enabled: true }).unwrap();
+            }
+        }
+        g.invoke_navigate(Page::Timers);
+        shot.pump(Duration::from_millis(1200));
+        snap(&format!("timers-{sfx}"));
+        g.set_overlay(Overlay::ArmTimer);
+        shot.pump(Duration::from_millis(200));
+        snap(&format!("arm-timer-{sfx}"));
+        g.set_overlay(Overlay::None);
+        if !dark {
+            let first = app.timer_list()[0].id.clone();
+            g.invoke_open_timer(first.into());
+            shot.pump(Duration::from_millis(200));
+            snap("edit-timer");
+            g.set_overlay(Overlay::TimerReminder);
+            shot.pump(Duration::from_millis(200));
+            snap("timer-reminder");
+            g.set_overlay(Overlay::None);
+            // Armed, then the last minute's countdown (a run 42 s out).
+            app.arm_next_timer(xbloom_app::util::now_unix()).unwrap();
+            shot.pump(Duration::from_millis(1200));
+            snap("timers-armed");
+            app.disarm_timer();
+            let now = xbloom_app::util::now_unix();
+            let next = app.timers.lock().unwrap().next_run(now, &xbloom_app::util::local_time).unwrap();
+            app.timers.lock().unwrap().arm(&xbloom_app::schedule::Run { at: now + 42, ..next }, now);
+            shot.pump(Duration::from_millis(1200));
+            snap("timer-countdown");
+            app.disarm_timer();
+            shot.pump(Duration::from_millis(1200));
+            g.invoke_navigate(Page::Home);
+            shot.pump(Duration::from_millis(300));
+            snap("home-timer");
+        }
 
         g.invoke_navigate(Page::History);
         shot.pump(Duration::from_millis(300));

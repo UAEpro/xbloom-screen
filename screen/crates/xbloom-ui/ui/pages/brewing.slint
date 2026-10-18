@@ -226,6 +226,7 @@ component Live inherits Rectangle {
 // The outcome, with Done / Brew again.
 component ResultPanel inherits Card {
     property <bool> ok: AppState.brew.success;
+    property <bool> rinse: AppState.brew.kind == "rinse";
     // Height the panel can have below the header.
     property <length> room: Layout.content-height - Layout.pad-bottom;
     // Buttons side by side when stacked (the panel is wide) or without room to stack them.
@@ -249,7 +250,7 @@ component ResultPanel inherits Card {
             }
         }
         Text {
-            text: AppState.brew.message;
+            text: root.rinse && root.ok ? "Filter rinsed" : AppState.brew.message;
             color: Theme.text;
             font-size: Theme.fs-h2;
             font-weight: 700;
@@ -257,7 +258,7 @@ component ResultPanel inherits Card {
             horizontal-alignment: center;
         }
         if root.ok: Text {
-            text: round(AppState.brew.water) + " g water  ·  " + round(AppState.brew.coffee) + " g in cup  ·  " + AppState.brew.elapsed;
+            text: root.rinse ? "Pour the rinse water away before you brew." : round(AppState.brew.water) + " g water  ·  " + round(AppState.brew.coffee) + " g in cup  ·  " + AppState.brew.elapsed;
             color: Theme.text-2;
             font-size: Theme.fs-small;
             wrap: word-wrap;
@@ -269,11 +270,15 @@ component ResultPanel inherits Card {
             clicked => { AppState.brew-dismiss(); }
         }
         if !root.row-buttons: Button {
-            text: root.ok ? "Brew again" : "Try again";
+            text: root.rinse ? "Rinse again" : root.ok ? "Brew again" : "Try again";
             kind: ButtonKind.secondary;
             clicked => {
                 AppState.brew-dismiss();
-                AppState.open-recipe(AppState.current.id);
+                if (root.rinse) {
+                    AppState.overlay = Overlay.rinse;
+                } else {
+                    AppState.open-recipe(AppState.current.id);
+                }
             }
         }
         if root.row-buttons: HorizontalLayout {
@@ -289,11 +294,15 @@ component ResultPanel inherits Card {
                 horizontal-stretch: 1;
                 min-height: Layout.compact ? 44px : 52px;
                 pad-x: 12px;
-                text: root.ok ? "Brew again" : "Try again";
+                text: root.rinse ? "Rinse again" : root.ok ? "Brew again" : "Try again";
                 kind: ButtonKind.secondary;
                 clicked => {
                     AppState.brew-dismiss();
-                    AppState.open-recipe(AppState.current.id);
+                    if (root.rinse) {
+                        AppState.overlay = Overlay.rinse;
+                    } else {
+                        AppState.open-recipe(AppState.current.id);
+                    }
                 }
             }
         }

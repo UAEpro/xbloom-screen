@@ -6088,6 +6088,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac",
  "jpeg-encoder",
+ "libc",
  "log",
  "pbkdf2",
  "serde",
@@ -6133,7 +6134,6 @@ version = "0.1.0"
 dependencies = [
  "i-slint-backend-testing",
  "jpeg-encoder",
- "libc",
  "log",
  "png",
  "qrcodegen",

@@ -94,6 +94,12 @@ component Details inherits Card {
     in property <length> pane-width;
     // Four stat tiles in a row need about 360 px; otherwise two by two.
     property <bool> wide-stats: pane-width >= 380px;
+    property <bool> tea: AppState.current.kind == "tea";
+    // Coffee: dose, ratio, grind, water. Tea (grinder off): water, temperature, pours, time.
+    property <string> v1: tea ? root.water : AppState.brew-dose;
+    property <string> v2: tea ? AppState.current.temp : AppState.current.ratio;
+    property <string> v3: tea ? AppState.current.pours.length : AppState.current.grind;
+    property <string> v4: tea ? AppState.current.time : root.water;
     property <bool> two-line-pours: pane-width - 2 * Layout.card-pad < 340px;
     Flickable {
         content-width: self.width;
@@ -105,20 +111,20 @@ component Details inherits Card {
             spacing: Layout.compact ? 10px : 14px;
             if root.wide-stats: HorizontalLayout {
                 spacing: 8px;
-                StatTile { icon: Icons.weight; label: "DOSE"; value: AppState.brew-dose; unit: "g"; }
-                StatTile { icon: Icons.scale; label: "RATIO"; value: AppState.current.ratio; unit: ""; }
-                StatTile { icon: Icons.gauge; label: "GRIND"; value: AppState.current.grind; unit: ""; }
-                StatTile { icon: Icons.droplet; label: "WATER"; value: root.water; unit: "ml"; }
+                StatTile { icon: root.tea ? Icons.droplet : Icons.weight; label: root.tea ? "WATER" : "DOSE"; value: root.v1; unit: root.tea ? "ml" : "g"; }
+                StatTile { icon: root.tea ? Icons.thermometer : Icons.scale; label: root.tea ? "TEMP" : "RATIO"; value: root.v2; unit: ""; }
+                StatTile { icon: root.tea ? Icons.leaf : Icons.gauge; label: root.tea ? "POURS" : "GRIND"; value: root.v3; unit: ""; }
+                StatTile { icon: root.tea ? Icons.timer : Icons.droplet; label: root.tea ? "TIME" : "WATER"; value: root.v4; unit: root.tea ? "" : "ml"; }
             }
             if !root.wide-stats: GridLayout {
                 spacing: 8px;
                 Row {
-                    StatTile { icon: Icons.weight; label: "DOSE"; value: AppState.brew-dose; unit: "g"; }
-                    StatTile { icon: Icons.scale; label: "RATIO"; value: AppState.current.ratio; unit: ""; }
+                    StatTile { icon: root.tea ? Icons.droplet : Icons.weight; label: root.tea ? "WATER" : "DOSE"; value: root.v1; unit: root.tea ? "ml" : "g"; }
+                    StatTile { icon: root.tea ? Icons.thermometer : Icons.scale; label: root.tea ? "TEMP" : "RATIO"; value: root.v2; unit: ""; }
                 }
                 Row {
-                    StatTile { icon: Icons.gauge; label: "GRIND"; value: AppState.current.grind; unit: ""; }
-                    StatTile { icon: Icons.droplet; label: "WATER"; value: root.water; unit: "ml"; }
+                    StatTile { icon: root.tea ? Icons.leaf : Icons.gauge; label: root.tea ? "POURS" : "GRIND"; value: root.v3; unit: ""; }
+                    StatTile { icon: root.tea ? Icons.timer : Icons.droplet; label: root.tea ? "TIME" : "WATER"; value: root.v4; unit: root.tea ? "" : "ml"; }
                 }
             }
             HorizontalLayout {
@@ -160,10 +166,12 @@ component BrewPanel inherits Card {
     property <bool> slim: Layout.short;
     property <bool> warn: root.busy || (AppState.link != LinkState.connected && !AppState.simulator);
     property <length> step-size: Layout.compact ? 40px : 48px;
+    // Tea: the stepper sizes the cup (the "dose" only keeps the ratio; the grinder is off).
+    property <bool> tea: AppState.current.kind == "tea";
     VerticalLayout {
         padding: Layout.card-pad;
         spacing: root.slim ? 8px : Layout.compact ? 10px : 14px;
-        if !root.slim: SectionTitle { text: "STRENGTH & SIZE"; }
+        if !root.slim: SectionTitle { text: root.tea ? "CUP SIZE" : "STRENGTH & SIZE"; }
         HorizontalLayout {
             spacing: 10px;
             IconButton {
@@ -176,14 +184,14 @@ component BrewPanel inherits Card {
                 horizontal-stretch: 1;
                 alignment: center;
                 Text {
-                    text: AppState.brew-dose + " g";
+                    text: root.tea ? root.water + " ml" : AppState.brew-dose + " g";
                     color: Theme.text;
                     font-size: Theme.fs-title;
                     font-weight: 700;
                     horizontal-alignment: center;
                 }
                 Text {
-                    text: root.water + " ml water";
+                    text: root.tea ? "grinder off" : root.water + " ml water";
                     color: Theme.text-2;
                     font-size: Theme.fs-caption;
                     horizontal-alignment: center;
@@ -198,7 +206,7 @@ component BrewPanel inherits Card {
         }
         if !Layout.stack: Rectangle { vertical-stretch: 1; }
         if !root.slim || root.warn: Text {
-            text: root.busy ? "A brew is already running." : AppState.link != LinkState.connected && !AppState.simulator ? "The machine is offline — it will connect when you brew." : "Beans in, cup in place, tank filled?";
+            text: root.busy ? "A brew is already running." : AppState.link != LinkState.connected && !AppState.simulator ? "The machine is offline — it will connect when you brew." : root.tea ? "Leaves in the filter, cup in place, tank filled?" : "Beans in, cup in place, tank filled?";
             color: root.warn ? Theme.warning : Theme.text-2;
             font-size: root.slim ? Theme.fs-caption : Theme.fs-small;
             wrap: root.slim ? no-wrap : word-wrap;

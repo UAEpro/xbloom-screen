@@ -5,9 +5,11 @@
 //! also owns the screen-only behaviour: the idle timer (screensaver, dimming, sleep, auto-lock),
 //! the PIN flows, the toast, and the live chart.
 //!
-//! 🛑 The only path to a remote start is `AppState.start-brew(true)`, which the UI raises only
-//! from the hold-to-brew gesture; it then goes through [`App::brew`], which refuses when remote
-//! start is turned off, and through the brew-lock PIN when one is configured.
+//! 🛑 The only paths to a remote start are the hold gestures: `AppState.start-brew(true)` (Hold
+//! to brew), `AppState.rinse(true)` (Hold to rinse) and `AppState.arm-timer()` (the arming
+//! checklist's Hold to arm, after which the armed run counts down for a minute with a Cancel
+//! button before it brews). Each goes through the brew-lock PIN when one is configured and
+//! through [`App`], which refuses when remote start is turned off.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -17,14 +19,19 @@ use std::time::{Duration, Instant};
 use slint::{ComponentHandle, Image, Model, ModelRc, SharedString, Timer, TimerMode, VecModel, Weak};
 use xbloom_app::app::attempt_ok;
 use xbloom_app::auth::{valid_pin, Attempt, Channel};
-use xbloom_app::settings::{LockMode, ScreensaverMode, Settings, Theme as ThemeMode};
-use xbloom_app::{App, Data, Event, Link, MachineStatus, PinPurpose, ToastKind};
+use xbloom_app::schedule::{ScheduleInput, TimerStatus};
+use xbloom_app::settings::{hhmm, parse_hhmm, LockMode, ScreensaverMode, Settings, Theme as ThemeMode};
+use xbloom_app::util::{local_time, now_unix};
+use xbloom_app::{App, BrewKind, Data, Event, Link, MachineStatus, PinPurpose, ToastKind};
 use xbloom_core::brew::Sample;
 
 use crate::format::{self, ChartScale};
 use crate::saver::{SaverContent, SaverPlayer};
 use crate::{clock, qr};
-use crate::{AppState, AppWindow, BrewInfo, LinkState, MediaRow, Overlay, Page, ScanRow, SlotRow, Theme, ToastInfo};
+use crate::{
+    AppState, AppWindow, BrewInfo, LinkState, MediaRow, Overlay, Page, ScanRow, SlotRow, Theme, TimerEdit, TimerRow,
+    ToastInfo,
+};
 
 /// What the PIN pad is collecting right now.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -36,6 +43,10 @@ enum PinFlow {
     BrewUnlock {
         start: bool,
     },
+    RinseUnlock {
+        start: bool,
+    },
+    ArmTimer,
     ChangeAdminCurrent,
     ChangeAdminNew {
         current: String,
@@ -52,6 +63,18 @@ enum PinFlow {
     SetupConfirm {
         new: String,
     },
+}
+
+/// The timer being edited on the screen.
+#[derive(Debug, Clone)]
+struct TimerDraft {
+    /// Empty for a new timer.
+    id: String,
+    /// Minutes after midnight.
+    minute: u32,
+    /// Monday … Sunday.
+    days: [bool; 7],
+    recipe_id: String,
 }
 
 struct Ui {
@@ -72,6 +95,12 @@ struct Ui {
     toast_timer: Timer,
     last_device_refresh: Instant,
     dimmed: bool,
+    /// Home-screen filter: 0 all, 1 coffee, 2 tea.
+    filter: i32,
+    /// The timer being edited.
+    edit: Option<TimerDraft>,
+    /// Seconds left in an armed timer's countdown as last shown (-1 = none).
+    countdown: i32,
 }
 
 thread_local! {
@@ -102,6 +131,7 @@ impl Ui {
         self.load_presets();
         self.load_media();
         self.load_device();
+        self.load_timers();
         self.apply_status(&self.app.machine_status());
         self.tick_clock();
     }
@@ -155,6 +185,9 @@ impl Ui {
             g.set_paired(paired);
             let needs_setup = !s.setup_complete;
             g.set_needs_setup(needs_setup);
+            g.set_rinse_ml(s.rinse.ml);
+            g.set_rinse_temp(s.rinse.temp_c);
+            g.set_remind_slot(parse_hhmm(&s.timers.remind_at).map_or(0, |m| (m / 30) as i32 + 1));
         });
         self.apply_scale(s.appearance.ui_scale);
         self.tick_clock();
@@ -173,6 +206,21 @@ impl Ui {
             (r.visible(), r.list().len())
         };
         let cards: Vec<_> = visible.iter().enumerate().map(|(i, s)| format::recipe_card(s, i)).collect();
+        let has_tea = cards.iter().any(|c| c.kind == "tea");
+        let has_coffee = cards.iter().any(|c| c.kind != "tea");
+        if !(has_tea && has_coffee) {
+            self.filter = 0;
+        }
+        let filter = self.filter;
+        let home: Vec<_> = cards
+            .iter()
+            .filter(|c| match filter {
+                1 => c.kind != "tea",
+                2 => c.kind == "tea",
+                _ => true,
+            })
+            .cloned()
+            .collect();
         self.with(|ui| {
             let g = ui.global::<AppState>();
             let cur = g.get_current().id;
@@ -180,9 +228,75 @@ impl Ui {
                 g.set_current(c.clone());
             }
             g.set_recipes(ModelRc::new(VecModel::from(cards)));
+            g.set_home_recipes(ModelRc::new(VecModel::from(home)));
+            g.set_has_tea(has_tea);
+            g.set_has_coffee(has_coffee);
+            g.set_recipe_filter(filter);
             g.set_recipe_count(all as i32);
         });
         self.load_presets();
+        self.load_timers();
+    }
+
+    fn load_timers(&mut self) {
+        let list = self.app.timer_list();
+        let now = now_unix();
+        let status = self.app.timer_status(now);
+        let h24 = self.app.settings().appearance.clock_24h;
+        let rows: Vec<TimerRow> = {
+            let lib = self.app.recipes.lock().unwrap();
+            list.iter()
+                .map(|t| {
+                    let name = lib.get(&t.recipe_id).map_or_else(|| "Deleted recipe".into(), |r| r.recipe.name);
+                    let next = status.next.as_ref().is_some_and(|n| n.schedule_id == t.id);
+                    format::timer_row(t, &name, next, h24)
+                })
+                .collect()
+        };
+        self.with(|ui| ui.global::<AppState>().set_timers(ModelRc::new(VecModel::from(rows))));
+        self.show_timer_status(&status, now);
+    }
+
+    /// The next run, its arming and its countdown (every second, from the idle tick).
+    fn show_timer_status(&mut self, st: &TimerStatus, now: u64) {
+        let h24 = self.app.settings().appearance.clock_24h;
+        let (when, recipe, kind, armed) = match &st.next {
+            Some(r) => {
+                let kind = self.app.recipes.lock().unwrap().get(&r.recipe_id).map(|s| format::kind(&s.recipe));
+                (format::timer_when(r.at, now, h24, &local_time), r.recipe_name.clone(), kind.unwrap_or(""), r.armed)
+            }
+            None => (String::new(), String::new(), "", false),
+        };
+        let blocked = if !st.clock_set {
+            "The clock isn't set yet: it syncs once the screen is on Wi-Fi."
+        } else if !st.remote_start {
+            "Timers start the machine from the screen: turn on Remote start in Settings → Security."
+        } else {
+            ""
+        };
+        let countdown = st.countdown_s.map_or(-1, |s| s as i32);
+        let started = countdown >= 0 && self.countdown < 0;
+        self.countdown = countdown;
+        self.with(|ui| {
+            let g = ui.global::<AppState>();
+            g.set_timer_has_next(st.next.is_some());
+            g.set_timer_next_when(when.into());
+            g.set_timer_next_recipe(recipe.into());
+            g.set_timer_next_kind(kind.into());
+            g.set_timer_armed(armed);
+            g.set_timer_blocked(blocked.into());
+            g.set_timer_countdown(countdown);
+            if started && g.get_overlay() == Overlay::ArmTimer {
+                g.set_overlay(Overlay::None);
+            }
+        });
+        if started {
+            self.wake();
+        }
+        if countdown >= 0 {
+            // Keep the screen on through the countdown.
+            self.last_activity = Instant::now();
+        }
     }
 
     fn load_history(&mut self) {
@@ -388,6 +502,12 @@ impl Ui {
                         b.stages.iter().map(|x| SharedString::from(x.as_str())).collect::<Vec<_>>(),
                     )),
                     outcome: b.outcome.clone().unwrap_or_default().into(),
+                    kind: match b.kind {
+                        BrewKind::Recipe => "recipe",
+                        BrewKind::Rinse => "rinse",
+                        BrewKind::Scheduled => "scheduled",
+                    }
+                    .into(),
                 }
             }
             _ => BrewInfo::default(),
@@ -457,6 +577,7 @@ impl Ui {
                 self.dismissed = false;
                 self.chart_dirty = true;
                 self.last_activity = Instant::now();
+                self.follow_scheduled_brew();
             }
             Event::BrewFinished { outcome, .. } => {
                 self.chart_dirty = true;
@@ -475,6 +596,20 @@ impl Ui {
             Event::Changed(Data::History) => self.load_history(),
             Event::Changed(Data::Media) => self.load_media(),
             Event::Changed(Data::Presets) => self.load_presets(),
+            Event::Changed(Data::Timers) => self.load_timers(),
+            Event::TimerReminder(_) => {
+                self.load_timers();
+                self.wake();
+                let show = self.weak.upgrade().is_some_and(|ui| {
+                    let g = ui.global::<AppState>();
+                    g.get_overlay() == Overlay::None
+                        && !g.get_needs_setup()
+                        && !(g.get_brew().active && !g.get_brew().finished)
+                });
+                if show {
+                    self.with(|ui| ui.global::<AppState>().set_overlay(Overlay::TimerReminder));
+                }
+            }
             Event::LockNow => self.lock(),
             Event::Toast { message, kind } => {
                 let k = match kind {
@@ -507,6 +642,9 @@ impl Ui {
 
     fn idle_tick(&mut self) {
         self.tick_clock();
+        let now = now_unix();
+        let timers = self.app.timer_status(now);
+        self.show_timer_status(&timers, now);
         // Addresses change as Wi-Fi comes and goes (and the ESP32's hotspot with it).
         if self.last_device_refresh.elapsed() > Duration::from_secs(5) {
             self.load_device();
@@ -739,6 +877,26 @@ impl Ui {
                     self.pin_error(&e);
                 }
             },
+            PinFlow::RinseUnlock { start } => match self.check(PinPurpose::Unlock, &pin) {
+                Ok(()) => {
+                    close(self);
+                    self.do_rinse(start);
+                }
+                Err(e) => {
+                    self.pin = PinFlow::RinseUnlock { start };
+                    self.pin_error(&e);
+                }
+            },
+            PinFlow::ArmTimer => match self.check(PinPurpose::Unlock, &pin) {
+                Ok(()) => {
+                    close(self);
+                    self.do_arm();
+                }
+                Err(e) => {
+                    self.pin = PinFlow::ArmTimer;
+                    self.pin_error(&e);
+                }
+            },
             PinFlow::ChangeAdminCurrent => match self.check(PinPurpose::Admin, &pin) {
                 Ok(()) => self.ask_pin(PinFlow::ChangeAdminNew { current: pin }, "New admin PIN", "4 to 8 digits"),
                 Err(e) => {
@@ -814,6 +972,9 @@ impl Ui {
         if page == Page::Settings {
             self.load_device();
         }
+        if page == Page::Timers {
+            self.load_timers();
+        }
         let Some(ui) = self.weak.upgrade() else { return };
         let g = ui.global::<AppState>();
         if page != Page::Settings {
@@ -882,7 +1043,182 @@ impl Ui {
         });
     }
 
+    /// A timer started a brew: show it, with its recipe as the current one ("Brew again").
+    fn follow_scheduled_brew(&mut self) {
+        let Some(b) = self.app.machine_status().brew else { return };
+        if b.kind != BrewKind::Scheduled {
+            return;
+        }
+        let card = b.recipe_id.as_deref().and_then(|id| self.app.recipes.lock().unwrap().get(id)).map(|s| {
+            self.brew_expected_s = format::estimate_seconds(&s.recipe);
+            format::recipe_card(&s, 0)
+        });
+        self.with(|ui| {
+            let g = ui.global::<AppState>();
+            if let Some(c) = card {
+                g.set_brew_dose(c.dose);
+                g.set_current(c);
+            }
+            g.set_overlay(Overlay::None);
+            g.set_page(Page::Brewing);
+        });
+        self.wake();
+    }
+
+    // ── rinse ────────────────────────────────────────────────────────────────────────
+
+    fn rinse(&mut self, start: bool) {
+        if self.app.brew_needs_pin() {
+            return self.ask_pin(
+                PinFlow::RinseUnlock { start },
+                "Enter PIN to rinse",
+                "Brewing is locked on this screen",
+            );
+        }
+        self.do_rinse(start);
+    }
+
+    fn do_rinse(&mut self, start: bool) {
+        match self.app.rinse(start) {
+            Ok(()) => {
+                self.samples.clear();
+                self.chart_dirty = true;
+                self.dismissed = false;
+                self.brew_expected_s = 60.0;
+                self.with(|ui| {
+                    let g = ui.global::<AppState>();
+                    g.set_overlay(Overlay::None);
+                    g.set_page(Page::Brewing);
+                });
+            }
+            Err(e) => self.toast(&e, "error"),
+        }
+    }
+
+    // ── timers ───────────────────────────────────────────────────────────────────────
+
+    fn arm_timer(&mut self) {
+        if self.app.brew_needs_pin() {
+            return self.ask_pin(PinFlow::ArmTimer, "Enter PIN to arm", "Timers start the machine");
+        }
+        self.do_arm();
+    }
+
+    fn do_arm(&mut self) {
+        let now = now_unix();
+        match self.app.arm_next_timer(now) {
+            Ok(run) => {
+                let h24 = self.app.settings().appearance.clock_24h;
+                let when = format::timer_when(run.at, now, h24, &local_time);
+                self.with(|ui| ui.global::<AppState>().set_overlay(Overlay::None));
+                self.toast(&format!("Armed: {} · {}", run.recipe_name, when), "success");
+            }
+            Err(e) => self.toast(&e, "error"),
+        }
+        self.load_timers();
+    }
+
+    fn disarm_timer(&mut self) {
+        if self.app.disarm_timer() {
+            self.toast("Timer disarmed: it won't brew", "info");
+        }
+        self.load_timers();
+    }
+
+    fn edit_timer(&mut self, id: &str) {
+        let draft = if id.is_empty() {
+            let current = self.weak.upgrade().map(|ui| ui.global::<AppState>().get_current().id.to_string());
+            let lib = self.app.recipes.lock().unwrap();
+            let recipe_id = current
+                .filter(|c| lib.get(c).is_some())
+                .or_else(|| lib.visible().first().map(|r| r.id.clone()))
+                .unwrap_or_default();
+            TimerDraft {
+                id: String::new(),
+                minute: 7 * 60,
+                days: [true, true, true, true, true, false, false],
+                recipe_id,
+            }
+        } else {
+            let Some(t) = self.app.timers.lock().unwrap().get(id) else { return };
+            TimerDraft { id: t.id, minute: parse_hhmm(&t.time).unwrap_or(7 * 60), days: t.days, recipe_id: t.recipe_id }
+        };
+        self.edit = Some(draft);
+        self.show_edit();
+        self.with(|ui| ui.global::<AppState>().set_overlay(Overlay::EditTimer));
+    }
+
+    fn show_edit(&self) {
+        let Some(d) = &self.edit else { return };
+        let h24 = self.app.settings().appearance.clock_24h;
+        let t = clock::local(0);
+        let lt = xbloom_app::util::LocalTime { hour: d.minute / 60, minute: d.minute % 60, ..t };
+        let recipe = self.app.recipes.lock().unwrap().get(&d.recipe_id).map(|r| r.recipe.name).unwrap_or_default();
+        let edit = TimerEdit {
+            id: d.id.as_str().into(),
+            time: clock::time_text(lt, h24).into(),
+            hh: format!("{:02}", d.minute / 60).into(),
+            mm: format!("{:02}", d.minute % 60).into(),
+            days: ModelRc::new(VecModel::from(d.days.to_vec())),
+            recipe_id: d.recipe_id.as_str().into(),
+            recipe: recipe.into(),
+        };
+        self.with(|ui| ui.global::<AppState>().set_edit_timer(edit));
+    }
+
+    fn edit_shift(&mut self, delta: i32) {
+        if let Some(d) = &mut self.edit {
+            d.minute = (d.minute as i32 + delta).rem_euclid(24 * 60) as u32;
+        }
+        self.show_edit();
+    }
+
+    fn edit_day(&mut self, i: i32) {
+        if let Some(day) = self.edit.as_mut().and_then(|d| d.days.get_mut(i.max(0) as usize)) {
+            *day = !*day;
+        }
+        self.show_edit();
+    }
+
+    fn edit_save(&mut self) {
+        let Some(d) = self.edit.clone() else { return };
+        let input = ScheduleInput { recipe_id: d.recipe_id, time: hhmm(d.minute), days: d.days, enabled: true };
+        let res = if d.id.is_empty() { self.app.add_timer(input) } else { self.app.update_timer(&d.id, input) };
+        match res {
+            Ok(_) => {
+                self.edit = None;
+                self.with(|ui| ui.global::<AppState>().set_overlay(Overlay::None));
+                self.toast("Timer saved. Arm it at the machine before it's due.", "success");
+            }
+            Err(e) => self.toast(&e, "error"),
+        }
+    }
+
+    fn edit_delete(&mut self) {
+        if let Some(d) = self.edit.take() {
+            if !d.id.is_empty() && self.app.delete_timer(&d.id) {
+                self.toast("Timer deleted", "info");
+            }
+        }
+        self.with(|ui| ui.global::<AppState>().set_overlay(Overlay::None));
+    }
+
+    fn set_timer_enabled(&mut self, id: &str, enabled: bool) {
+        let Some(t) = self.app.timers.lock().unwrap().get(id) else { return };
+        let input = ScheduleInput { recipe_id: t.recipe_id, time: t.time, days: t.days, enabled };
+        if let Err(e) = self.app.update_timer(id, input) {
+            self.toast(&e, "error");
+        }
+    }
+
     fn assign_slot(&mut self, slot: usize, id: &str) {
+        // Slot 3 is the timer editor's recipe.
+        if slot == 3 {
+            if let Some(d) = &mut self.edit {
+                d.recipe_id = id.to_string();
+            }
+            return self.show_edit();
+        }
         let mut slots = self.app.presets.lock().unwrap().presets.slots.clone();
         if let Some(s) = slots.get_mut(slot) {
             *s = Some(id.to_string());
@@ -1011,6 +1347,9 @@ pub fn bind(ui: &AppWindow, app: Arc<App>) {
         toast_timer: Timer::default(),
         last_device_refresh: Instant::now(),
         dimmed: false,
+        filter: 0,
+        edit: None,
+        countdown: -1,
     }));
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&st)));
     st.borrow_mut().load_all();
@@ -1171,6 +1510,36 @@ pub fn bind(ui: &AppWindow, app: Arc<App>) {
         me.with(|ui| ui.global::<AppState>().set_page(Page::Home));
     });
     on!(ui, st, on_restart, |me| me.app.hooks().restart());
+    on!(ui, st, on_set_recipe_filter, |me, f: i32| {
+        me.filter = f.clamp(0, 2);
+        me.load_recipes();
+    });
+    on!(ui, st, on_rinse, |me, start: bool| me.rinse(start));
+    on!(ui, st, on_set_rinse_ml, |me, v: i32| {
+        me.app.update_settings(|s| s.rinse.ml = v);
+    });
+    on!(ui, st, on_set_rinse_temp, |me, v: i32| {
+        me.app.update_settings(|s| s.rinse.temp_c = v);
+    });
+    on!(ui, st, on_arm_timer, |me| me.arm_timer());
+    on!(ui, st, on_disarm_timer, |me| me.disarm_timer());
+    on!(ui, st, on_open_timer, |me, id: SharedString| me.edit_timer(&id));
+    on!(ui, st, on_edit_timer_shift, |me, d: i32| me.edit_shift(d));
+    on!(ui, st, on_edit_timer_day, |me, i: i32| me.edit_day(i));
+    on!(ui, st, on_edit_timer_pick, |me| {
+        me.with(|ui| {
+            let g = ui.global::<AppState>();
+            g.set_picking_slot(3);
+            g.set_overlay(Overlay::PickRecipe);
+        });
+    });
+    on!(ui, st, on_edit_timer_save, |me| me.edit_save());
+    on!(ui, st, on_edit_timer_delete, |me| me.edit_delete());
+    on!(ui, st, on_set_timer_enabled, |me, id: SharedString, v: bool| me.set_timer_enabled(&id, v));
+    on!(ui, st, on_set_remind_slot, |me, v: i32| {
+        let at = if v <= 0 { String::new() } else { hhmm(((v - 1) * 30) as u32) };
+        me.app.update_settings(|s| s.timers.remind_at = at);
+    });
 
     // App events → the UI thread.
     app.subscribe(move |ev| {

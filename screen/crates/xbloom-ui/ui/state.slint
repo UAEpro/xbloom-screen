@@ -1,9 +1,9 @@
 // The contract between the Rust app and the UI: data structs, the AppState global
 // (properties Rust fills in, callbacks Rust implements), and the icon set.
 
-export enum Page { home, recipe, brewing, history, presets, settings, setup }
+export enum Page { home, recipe, brewing, history, presets, settings, setup, timers }
 export enum LinkState { disconnected, connecting, connected }
-export enum Overlay { none, pin, cancel-brew, pick-recipe, machine, confirm }
+export enum Overlay { none, pin, cancel-brew, pick-recipe, machine, confirm, rinse, arm-timer, timer-reminder, edit-timer }
 
 export struct PourInfo {
     label: string,
@@ -19,7 +19,7 @@ export struct RecipeCard {
     id: string,
     name: string,
     subtitle: string,  // "Omni · custom"
-    kind: string,      // "filter" | "iced" | "no-grind"
+    kind: string,      // "filter" | "iced" | "no-grind" | "tea"
     dose: int,
     ratio: string,     // "1:15"
     ratio-value: float,
@@ -51,6 +51,7 @@ export struct BrewInfo {
     stage-index: int,
     stages: [string],
     outcome: string,
+    kind: string,      // "recipe" | "rinse" | "scheduled"
 }
 
 export struct HistoryRow { id: string, title: string, when: string, detail: string, success: bool }
@@ -58,6 +59,27 @@ export struct SlotRow { slot: string, recipe-id: string, recipe: string, detail:
 export struct ScanRow { address: string, name: string, signal: string }
 export struct MediaRow { name: string, detail: string, video: bool }
 export struct ToastInfo { message: string, kind: string, visible: bool }
+
+// A timer in the list.
+export struct TimerRow {
+    id: string,
+    time: string,      // "07:00" (or "7:00 AM")
+    days: string,      // "Weekdays", "Mon, Wed", "Once · Tomorrow"
+    recipe: string,
+    enabled: bool,
+    next: bool,        // the next run comes from this timer
+}
+
+// The timer being edited (Rust owns it; the editor calls back to change it).
+export struct TimerEdit {
+    id: string,        // "" = a new timer
+    time: string,      // "07:00" (or "7:00 AM")
+    hh: string,        // "07"
+    mm: string,        // "00"
+    days: [bool],      // Monday … Sunday
+    recipe-id: string,
+    recipe: string,
+}
 
 export global AppState {
     // ── navigation ──
@@ -83,6 +105,11 @@ export global AppState {
 
     // ── recipes ──
     in property <[RecipeCard]> recipes: [];
+    // The home screen's tiles: `recipes` through the Coffee / Tea filter.
+    in property <[RecipeCard]> home-recipes: [];
+    in property <int> recipe-filter: 0;        // 0 all · 1 coffee · 2 tea
+    in property <bool> has-tea: false;
+    in property <bool> has-coffee: true;
     in-out property <RecipeCard> current;
     in-out property <int> brew-dose: 16;
 
@@ -105,6 +132,21 @@ export global AppState {
     in property <bool> slots-dirty: false;
     in property <string> slots-status: "";
     in-out property <int> picking-slot: -1;
+
+    // ── timed brews ──
+    in property <[TimerRow]> timers: [];
+    in property <TimerEdit> edit-timer;
+    in property <bool> timer-has-next: false;
+    in property <string> timer-next-when: "";  // "Tomorrow 07:00"
+    in property <string> timer-next-recipe: "";
+    in property <string> timer-next-kind: "";  // the recipe's kind, for the arming checklist
+    in property <bool> timer-armed: false;
+    in property <int> timer-countdown: -1;     // seconds to an armed run in its last minute, else -1
+    in property <string> timer-blocked: "";    // why timers can't be armed ("" = they can)
+    in property <int> remind-slot: 43;         // evening reminder: 0 off, else half-hours + 1 (43 = 21:00)
+    // Rinse button settings.
+    in property <int> rinse-ml: 100;
+    in property <int> rinse-temp: 95;
 
     // ── lock / PIN pad ──
     in property <bool> locked: false;
@@ -200,6 +242,23 @@ export global AppState {
     callback setup-demo();
     callback setup-finish();
     callback restart();
+    // Tea / coffee filter on the home screen.
+    callback set-recipe-filter(int);
+    // 🔥 Rinse the filter: true = start it (from the hold gesture), false = load only.
+    callback rinse(bool);
+    callback set-rinse-ml(int);
+    callback set-rinse-temp(int);
+    // Timers. 🔥 arm-timer is raised only by the arming checklist's hold gesture.
+    callback arm-timer();
+    callback disarm-timer();
+    callback open-timer(string);             // edit a timer; "" = a new one
+    callback edit-timer-shift(int);          // ± minutes
+    callback edit-timer-day(int);            // toggle Monday + n
+    callback edit-timer-pick();              // choose its recipe
+    callback edit-timer-save();
+    callback edit-timer-delete();
+    callback set-timer-enabled(string, bool);
+    callback set-remind-slot(int);
 }
 
 export global Icons {
@@ -249,4 +308,10 @@ export global Icons {
     out property <image> sparkles: @image-url("icons/sparkles.svg");
     out property <image> gauge: @image-url("icons/gauge.svg");
     out property <image> scale: @image-url("icons/scale.svg");
+    out property <image> leaf: @image-url("icons/leaf.svg");
+    out property <image> alarm: @image-url("icons/alarm-clock.svg");
+    out property <image> alarm-on: @image-url("icons/alarm-clock-check.svg");
+    out property <image> alarm-off: @image-url("icons/alarm-clock-off.svg");
+    out property <image> rinse: @image-url("icons/droplets.svg");
+    out property <image> checklist: @image-url("icons/list-checks.svg");
 }

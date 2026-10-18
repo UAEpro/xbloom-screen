@@ -28,6 +28,7 @@ use xbloom_core::Recipe;
 use crate::app::{attempt_ok, App, Data, PinPurpose};
 use crate::auth::{Attempt, Channel};
 use crate::recipes::{to_yaml, RecipeMeta, StoredRecipe};
+use crate::schedule::{Schedule, ScheduleInput};
 use crate::settings::SettingsPatch;
 
 /// HTTP method.
@@ -287,6 +288,29 @@ fn route(app: &App, req: &mut dyn HttpRequest, method: Method, segs: &[&str], to
             app.cancel_brew();
             Response::ok(&json!({"ok": true}))
         }
+        // ── timed brews ──
+        // 🛑 There is no route that arms a timer (or starts a brew): arming happens at the
+        // machine, on the screen, after its checklist. The panel can only plan and disarm.
+        (Get, ["timers"]) => Response::ok(&json!({
+            "timers": app.timer_list(),
+            "status": app.timer_status(crate::util::now_unix()),
+        })),
+        (Post, ["timers"]) => {
+            let b: ScheduleInput = read_json(req)?;
+            let t = app.add_timer(b).map_err(|e| Response::error(400, e))?;
+            Response::json(201, &t)
+        }
+        (Post, ["timers", "disarm"]) => Response::ok(&json!({"ok": true, "was_armed": app.disarm_timer()})),
+        (Put, ["timers", id]) => {
+            let b: ScheduleInput = read_json(req)?;
+            Response::ok(&app.update_timer(id, b).map_err(|e| Response::error(400, e))?)
+        }
+        (Delete, ["timers", id]) => {
+            if !app.delete_timer(id) {
+                return Err(Response::error(404, "no such timer"));
+            }
+            Response::ok(&json!({"ok": true}))
+        }
         // ── recipes ──
         (Get, ["recipes"]) => Response::ok(&app.recipes.lock().unwrap().list()),
         (Post, ["recipes"]) => {
@@ -298,7 +322,7 @@ fn route(app: &App, req: &mut dyn HttpRequest, method: Method, segs: &[&str], to
         (Post, ["recipes", "validate"]) => {
             let v: Value = read_json(req)?;
             let v = v.get("recipe").cloned().unwrap_or(v);
-            match parse_recipe_value(v) {
+            match parse_recipe_value(v).and_then(|r| crate::recipes::check(&r).map(|()| r)) {
                 Ok(r) => Response::ok(
                     &json!({"ok": true, "total_water_ml": r.total_water_ml(), "ratio": r.effective_ratio()}),
                 ),
@@ -554,6 +578,8 @@ struct Backup {
     settings: Value,
     recipes: Vec<StoredRecipe>,
     presets: [Option<String>; 3],
+    #[serde(default)]
+    timers: Vec<Schedule>,
 }
 
 fn backup(app: &App) -> Backup {
@@ -567,6 +593,7 @@ fn backup(app: &App) -> Backup {
         settings,
         recipes: app.recipes.lock().unwrap().list(),
         presets: app.presets.lock().unwrap().presets.slots.clone(),
+        timers: app.timer_list(),
     }
 }
 
@@ -584,7 +611,10 @@ fn restore(app: &App, b: Backup) -> Result<(), String> {
     }
     if let Some(o) = settings.as_object_mut() {
         o.retain(|k, _| {
-            matches!(k.as_str(), "device_name" | "timezone" | "appearance" | "screensaver" | "security" | "machine")
+            matches!(
+                k.as_str(),
+                "device_name" | "timezone" | "appearance" | "screensaver" | "security" | "machine" | "rinse" | "timers"
+            )
         });
     }
     let patch: SettingsPatch = serde_json::from_value(settings).map_err(|e| format!("settings: {e}"))?;
@@ -593,7 +623,11 @@ fn restore(app: &App, b: Backup) -> Result<(), String> {
         s.apply(patch);
     });
     let _ = app.set_presets(b.presets);
+    // A restored timer is never armed: that only happens at the machine.
+    let ids: Vec<String> = app.recipes.lock().unwrap().list().into_iter().map(|r| r.id).collect();
+    app.timers.lock().unwrap().replace_all(b.timers.into_iter().filter(|t| ids.contains(&t.recipe_id)).collect());
     app.changed(Data::Recipes);
+    app.changed(Data::Timers);
     Ok(())
 }
 
@@ -714,7 +748,7 @@ mod tests {
         assert!(!text.contains("salt") && text.contains("has_admin_pin"));
         // Recipes: list, import YAML, validate, export.
         let list = handle(&app, &mut Req::new(Method::Get, "/api/recipes", "").auth(&tok));
-        assert_eq!(body_json(&list).as_array().unwrap().len(), 3);
+        assert_eq!(body_json(&list).as_array().unwrap().len(), crate::recipes::STARTERS.len());
         let yaml = "name: Kenya\ndose_g: 15\ngrind: 50\npours:\n  - {ml: 45, temp_c: 93, rpm: 100}\n  - {ml: 195, temp_c: 92, rpm: 100}\n";
         let imp = handle(&app, &mut Req::new(Method::Post, "/api/recipes/import", yaml).auth(&tok));
         assert_eq!(body_json(&imp)["imported"], 1);
@@ -724,6 +758,13 @@ mod tests {
                 .auth(&tok),
         );
         assert_eq!(body_json(&v)["ok"], false);
+        // A tea recipe must not grind.
+        let tea = json!({"recipe": {"name": "Tea", "kind": "tea", "dose_g": 10, "grind": 40,
+            "pours": [{"ml": 100, "temp_c": 85, "pattern": "center"}, {"ml": 100, "temp_c": 85, "pattern": "center"}]}});
+        let v =
+            body_json(&handle(&app, &mut Req::new(Method::Post, "/api/recipes/validate", &tea.to_string()).auth(&tok)));
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains("grinder off"));
         let id = body_json(&handle(&app, &mut Req::new(Method::Get, "/api/recipes", "").auth(&tok)))[0]["id"]
             .as_str()
             .unwrap()
@@ -733,11 +774,60 @@ mod tests {
         // Presets need all three.
         let p = handle(&app, &mut Req::new(Method::Post, "/api/presets/push", "").auth(&tok));
         assert_eq!(p.status, 400);
-        // No brew-start endpoint exists.
+        // No brew-start endpoint exists, and no way to arm a timer either.
         assert_eq!(handle(&app, &mut Req::new(Method::Post, "/api/brew/start", "{}").auth(&tok)).status, 404);
+        for path in ["/api/timers/arm", "/api/timers/start", "/api/rinse"] {
+            assert_eq!(handle(&app, &mut Req::new(Method::Post, path, "{}").auth(&tok)).status, 404, "{path}");
+        }
         // Logout kills the session.
         handle(&app, &mut Req::new(Method::Post, "/api/logout", "").auth(&tok));
         assert_eq!(handle(&app, &mut Req::new(Method::Get, "/api/status", "").auth(&tok)).status, 401);
+        app.shutdown();
+    }
+
+    #[test]
+    fn timers_can_be_planned_and_disarmed_but_not_armed_from_the_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = test_app(dir.path(), true);
+        handle(&app, &mut Req::new(Method::Post, "/api/setup", r#"{"pin":"2580"}"#));
+        let ok = handle(&app, &mut Req::new(Method::Post, "/api/login", r#"{"pin":"2580"}"#));
+        let tok = body_json(&ok)["token"].as_str().unwrap().to_string();
+        let recipe = app.recipes.lock().unwrap().list()[0].id.clone();
+        // Plan one, every day, two hours from now.
+        let lt = crate::util::local_time(crate::util::now_unix() as i64);
+        let time = crate::settings::hhmm((lt.hour * 60 + lt.minute + 120) % 1440);
+        let days = [true; 7];
+        let body = json!({"recipe_id": recipe, "time": time, "days": days});
+        let r = handle(&app, &mut Req::new(Method::Post, "/api/timers", &body.to_string()).auth(&tok));
+        assert_eq!(r.status, 201);
+        let id = body_json(&r)["id"].as_str().unwrap().to_string();
+        assert_eq!(body_json(&r)["time"], time.as_str());
+        let bad = json!({"recipe_id": "nope", "time": "07:00"});
+        assert_eq!(handle(&app, &mut Req::new(Method::Post, "/api/timers", &bad.to_string()).auth(&tok)).status, 400);
+        // Its next run shows, not armed.
+        let list = body_json(&handle(&app, &mut Req::new(Method::Get, "/api/timers", "").auth(&tok)));
+        assert_eq!(list["timers"].as_array().unwrap().len(), 1);
+        assert_eq!(list["status"]["next"]["armed"], false);
+        // Arming is the screen's job; the panel can only disarm.
+        app.arm_next_timer(crate::util::now_unix()).unwrap();
+        let list = body_json(&handle(&app, &mut Req::new(Method::Get, "/api/timers", "").auth(&tok)));
+        assert_eq!(list["status"]["next"]["armed"], true);
+        let d = handle(&app, &mut Req::new(Method::Post, "/api/timers/disarm", "").auth(&tok));
+        assert_eq!(body_json(&d)["was_armed"], true);
+        assert!(app.timers.lock().unwrap().armed().is_none());
+        // Edit and delete.
+        let change =
+            json!({"recipe_id": recipe, "time": "07:30", "days": [false, false, false, false, false, true, true]});
+        let u = handle(&app, &mut Req::new(Method::Put, &format!("/api/timers/{id}"), &change.to_string()).auth(&tok));
+        assert_eq!(body_json(&u)["time"], "07:30");
+        assert_eq!(
+            handle(&app, &mut Req::new(Method::Delete, &format!("/api/timers/{id}"), "").auth(&tok)).status,
+            200
+        );
+        assert_eq!(
+            handle(&app, &mut Req::new(Method::Delete, &format!("/api/timers/{id}"), "").auth(&tok)).status,
+            404
+        );
         app.shutdown();
     }
 

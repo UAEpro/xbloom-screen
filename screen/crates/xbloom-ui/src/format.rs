@@ -5,10 +5,13 @@
 use slint::{Color, ModelRc, SharedString, VecModel};
 use xbloom_app::history::HistoryEntry;
 use xbloom_app::recipes::StoredRecipe;
+use xbloom_app::schedule::Schedule;
+use xbloom_app::util::LocalTime;
 use xbloom_core::brew::{stage_label, Sample};
 use xbloom_core::Recipe;
 
-use crate::{HistoryRow, PourInfo, RecipeCard};
+use crate::clock;
+use crate::{HistoryRow, PourInfo, RecipeCard, TimerRow};
 
 /// Card colours, cycled when a recipe has none of its own.
 pub const TINTS: [&str; 6] = ["#c8743a", "#b5523b", "#8a6a3d", "#3f8f6b", "#3a7cb8", "#7a5cc0"];
@@ -55,9 +58,12 @@ pub fn ratio_text(r: f64) -> String {
     }
 }
 
-/// Recipe kind for the card icon: `no-grind`, `iced` or `filter`.
+/// Recipe kind for the card icon and the Coffee / Tea filter: `tea`, `no-grind`, `iced` or
+/// `filter`.
 pub fn kind(r: &Recipe) -> &'static str {
-    if r.no_grind() {
+    if xbloom_app::recipes::is_tea(r) {
+        "tea"
+    } else if r.no_grind() {
         "no-grind"
     } else if r.ice_g.is_some() || r.hot_water_ml.is_some() || r.name.to_lowercase().contains("iced") {
         "iced"
@@ -96,6 +102,7 @@ pub fn recipe_card(s: &StoredRecipe, index: usize) -> RecipeCard {
         subtitle.push(d.clone());
     }
     subtitle.push(match kind(r) {
+        "tea" => "Tea".into(),
         "no-grind" => "Pre-ground".into(),
         "iced" => "Iced".into(),
         _ => r.kind.clone().filter(|k| k != "custom").unwrap_or_else(|| "Pour-over".into()),
@@ -119,6 +126,53 @@ pub fn recipe_card(s: &StoredRecipe, index: usize) -> RecipeCard {
         tint,
         brews: s.meta.brews as i32,
         pours: ModelRc::new(VecModel::from(pours)),
+    }
+}
+
+const SHORT_DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+fn same_day(a: LocalTime, b: LocalTime) -> bool {
+    (a.year, a.month, a.day) == (b.year, b.month, b.day)
+}
+
+/// When a timed run happens, relative to `now`: "Today 07:00", "Tomorrow 07:00", "Sat 07:00".
+/// `local` converts unix seconds to local time.
+pub fn timer_when(at: u64, now: u64, h24: bool, local: &dyn Fn(i64) -> LocalTime) -> String {
+    let (t, n) = (local(at as i64), local(now as i64));
+    let time = clock::time_text(t, h24);
+    if same_day(t, n) {
+        format!("Today {time}")
+    } else if same_day(t, local(now as i64 + 86_400)) {
+        format!("Tomorrow {time}")
+    } else {
+        format!("{} {time}", SHORT_DAYS[t.weekday as usize % 7])
+    }
+}
+
+/// A timer's days: "Every day", "Weekdays", "Weekends", "Mon, Wed, Fri", or "Once" for a
+/// one-off.
+pub fn days_text(days: &[bool; 7]) -> String {
+    const NAMES: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    match days {
+        [true, true, true, true, true, true, true] => "Every day".into(),
+        [true, true, true, true, true, false, false] => "Weekdays".into(),
+        [false, false, false, false, false, true, true] => "Weekends".into(),
+        d if !d.iter().any(|&x| x) => "Once".into(),
+        d => d.iter().zip(NAMES).filter(|(on, _)| **on).map(|(_, n)| n).collect::<Vec<_>>().join(", "),
+    }
+}
+
+/// A timer for the list.
+pub fn timer_row(s: &Schedule, recipe: &str, next: bool, h24: bool) -> TimerRow {
+    let minutes = xbloom_app::settings::parse_hhmm(&s.time).unwrap_or(0);
+    let t = LocalTime { hour: minutes / 60, minute: minutes % 60, second: 0, weekday: 0, day: 1, month: 0, year: 2026 };
+    TimerRow {
+        id: s.id.as_str().into(),
+        time: clock::time_text(t, h24).into(),
+        days: days_text(&s.days).into(),
+        recipe: recipe.into(),
+        enabled: s.enabled,
+        next,
     }
 }
 
@@ -229,11 +283,48 @@ mod tests {
 
     #[test]
     fn cards_from_starters() {
-        let r = xbloom_app::recipes::parse_recipes(xbloom_app::recipes::STARTERS[2]).unwrap().remove(0).unwrap();
+        let r = xbloom_app::recipes::parse_recipes(xbloom_app::recipes::STARTERS[2].1).unwrap().remove(0).unwrap();
         let s = StoredRecipe { id: "x".into(), meta: Default::default(), recipe: r };
         let c = recipe_card(&s, 0);
         assert_eq!(c.kind.as_str(), "iced");
         assert_eq!(c.ratio.as_str(), "1:10");
         assert_eq!(c.time.as_str(), "~1:45");
+    }
+
+    fn utc(ts: i64) -> LocalTime {
+        let days = ts.div_euclid(86_400);
+        let secs = ts.rem_euclid(86_400);
+        LocalTime {
+            hour: (secs / 3600) as u32,
+            minute: (secs / 60 % 60) as u32,
+            second: (secs % 60) as u32,
+            weekday: ((days + 4).rem_euclid(7)) as u32,
+            day: (days % 28) as u32 + 1,
+            month: (days / 28 % 12) as u32,
+            year: 1970 + (days / 336) as i32,
+        }
+    }
+
+    #[test]
+    fn timer_texts() {
+        // Monday 2026-10-19 00:00 UTC.
+        let monday: u64 = 1_792_368_000;
+        let at = monday + 7 * 3600;
+        assert_eq!(timer_when(at, monday + 3600, true, &utc), "Today 07:00");
+        assert_eq!(timer_when(at + 86_400, monday + 22 * 3600, true, &utc), "Tomorrow 07:00");
+        assert_eq!(timer_when(at + 5 * 86_400, monday, false, &utc), "Sat 7:00 AM");
+        assert_eq!(days_text(&[true, true, true, true, true, false, false]), "Weekdays");
+        assert_eq!(days_text(&[true, false, true, false, true, false, false]), "Mon, Wed, Fri");
+        assert_eq!(days_text(&[false; 7]), "Once");
+        assert_eq!(days_text(&[true; 7]), "Every day");
+    }
+
+    #[test]
+    fn tea_cards() {
+        let r = xbloom_app::recipes::parse_recipes(xbloom_app::recipes::STARTERS[3].1).unwrap().remove(0).unwrap();
+        let s = StoredRecipe { id: "t".into(), meta: Default::default(), recipe: r };
+        let c = recipe_card(&s, 0);
+        assert_eq!((c.kind.as_str(), c.subtitle.as_str(), c.grind.as_str()), ("tea", "Omni · Tea", "—"));
+        assert_eq!((c.water, c.temp.as_str()), (250, "80°"));
     }
 }

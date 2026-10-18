@@ -10,6 +10,8 @@ Bluetooth protocol documented in this repository's [main README](../README.md).
 | ![Recipe library on the screen](../docs/img/screen/home-light.png) | ![A brew in progress](../docs/img/screen/brewing-dark.png) |
 | **Screensaver** | **Settings → Admin panel** |
 | ![Clock screensaver](../docs/img/screen/screensaver-clock-dark.png) | ![QR code for the admin panel](../docs/img/screen/settings-admin-light.png) |
+| **Timers** | **Arming a timer at the machine** |
+| ![Timers and the next run](../docs/img/screen/timers-light.png) | ![The arming checklist](../docs/img/screen/arm-timer-dark.png) |
 
 More screens are in [`docs/img/screen/`](../docs/img/screen/), most in light and dark. They
 are rendered from the real app driving the built-in simulated machine.
@@ -25,6 +27,18 @@ Raspberry Pi build and the ESP32-S3 image. What changed is in [CHANGELOG.md](CHA
 - **Recipe library**: swipe through your recipes and tap one to see its pours, grind,
   temperature and water. **Load** sends it to the machine and arms it; then press start on
   the machine. Optionally, **Hold to brew** starts it from the screen (see Safety below).
+- **Coffee and tea**: tea recipes brew with the grinder off (put the leaves in a paper
+  filter). Three starter teas (green, black, oolong) come with the coffee ones, and a filter
+  on the home screen shows all recipes, coffee only or tea only.
+- **Rinse the filter**: one button pours hot water (100 ml at 95 °C by default) through the
+  empty filter and dripper, grinder off, to rinse the paper and warm the dripper. It uses the
+  same hold gesture as a brew.
+- **Timers**: brew at a set time, once or on chosen weekdays. A timer never brews by
+  itself: you **arm** each run at the machine, after a checklist (beans or leaves in, filter
+  and dripper in place, cup under it, water filled) and the hold gesture. When it is due, the
+  screen counts down for a minute with a big **Cancel** button, and a run is skipped if the
+  machine isn't connected and ready. An optional evening reminder asks you to arm the next
+  morning's timer.
 - **Live brew view**: progress ring, a water / in-cup chart, the current pour and a **Stop**
   button.
 - **Dial presets**: program the machine's three Easy-Mode dial presets from any recipes.
@@ -43,14 +57,18 @@ Raspberry Pi build and the ESP32-S3 image. What changed is in [CHANGELOG.md](CHA
 
 **In the admin panel** (any phone or laptop on the same network, signed in with the admin
 PIN):
-- Create and edit recipes with live validation against the machine's limits. You can also
-  import and export the YAML format of the `xbloom` CLI, or reorder and hide recipes.
+- Create and edit recipes, coffee or tea, with live validation against the machine's
+  limits. You can also import and export the YAML format of the `xbloom` CLI, or reorder and
+  hide recipes.
+- Plan timers (time, days, recipe), switch them on and off, and disarm or cancel a run.
+  Arming is only possible at the machine.
 - Program the dial presets and push them to the machine.
 - Upload screensaver videos and photos. Videos are converted **in your browser** to the
   screen's own format, so the device never needs a video decoder.
 - View brew history with charts, and export it as CSV.
 - Change every setting: lock and PINs, remote start, appearance, screensaver, machine pairing,
-  Wi-Fi and time zone (ESP32), backup and restore, restart.
+  rinse water and temperature, the timer reminder, Wi-Fi and time zone (ESP32), backup and
+  restore, restart.
 
 ## 🛑 Safety
 
@@ -58,11 +76,20 @@ This app has the same safety rule as the rest of the repository: **loading a rec
 arms the machine; it never starts a brew.**
 
 - **Load** sends only the LOAD frames. After that you either press start on the machine, or…
-- **Hold to brew** (on by default, can be turned off in the settings) is the only way the
-  screen starts a brew. It is a deliberate press-and-hold gesture (1.2 s by default,
-  adjustable). If a brew lock is set, it asks for the PIN first.
-- The admin panel's API **has no brew-start endpoint at all**. From the network you can load
-  recipes, program presets and **stop** a brew, but never start one.
+- The screen starts water in only three ways. All three need **Remote start** (on by
+  default, can be turned off in the settings) and ask for the PIN if a brew lock is set:
+  - **Hold to brew**: a deliberate press-and-hold gesture (1.2 s by default, adjustable).
+  - **Hold to rinse**: the same gesture, for the rinse button. With remote start off, the
+    rinse is only loaded and you press start on the machine, like a recipe.
+  - **An armed timer**: someone at the machine went through the checklist and held **Hold
+    to arm**. That arms one run only. When it is due, a one-minute countdown with **Cancel**
+    comes first. A brew already running, or a run more than 10 minutes late (say the screen
+    was off), is skipped rather than brewed late; if the machine can't be reached or
+    refuses the recipe, the screen shows why and nothing retries it. Any change to the
+    timer, or to the recipe it brews, disarms it.
+- The admin panel's API **has no brew-start or timer-arm endpoint at all**. From the network
+  you can load recipes, program presets, plan timers, **disarm** a timer and **stop** a
+  brew, but never start one or arm a timer.
 - **Stop** (on the screen and in the panel) cancels a running brew.
 
 ## Hardware

@@ -160,6 +160,28 @@ component MachineTab inherits VerticalLayout {
         description: "Use a built-in simulated machine — try everything with no coffee machine.";
         Toggle { checked: AppState.simulator; toggled(v) => { AppState.set-simulator(v); } }
     }
+    SettingRow {
+        title: "Rinse water";
+        description: "How much hot water the Rinse button pours through the empty filter.";
+        Stepper {
+            value: AppState.rinse-ml;
+            minimum: 30;
+            maximum: 250;
+            step: 10;
+            unit: " ml";
+            changed(v) => { AppState.set-rinse-ml(v); }
+        }
+    }
+    SettingRow {
+        title: "Rinse temperature";
+        Stepper {
+            value: AppState.rinse-temp;
+            minimum: 40;
+            maximum: 95;
+            unit: "°";
+            changed(v) => { AppState.set-rinse-temp(v); }
+        }
+    }
     if AppState.paired && !AppState.simulator: Button {
         text: "Forget this machine";
         kind: ButtonKind.ghost;

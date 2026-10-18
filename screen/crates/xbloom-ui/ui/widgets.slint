@@ -112,6 +112,8 @@ export component HoldButton inherits Rectangle {
     in property <string> holding-text: "Keep holding…";
     in property <int> hold-ms: 1200;
     in property <color> tone: Theme.accent;
+    // Label colour on the light track (before the hold fills it).
+    in property <color> ink: Theme.accent-strong;
     in property <bool> enabled: true;
     in property <bool> locked: false;     // show a lock: a PIN is asked after the hold
     callback activated();
@@ -134,13 +136,13 @@ export component HoldButton inherits Rectangle {
         Icon {
             y: (parent.height - self.height) / 2;
             source: root.locked ? Icons.lock : Icons.flame;
-            tint: Theme.accent-strong;
+            tint: root.ink;
             width: 24px;
             height: 24px;
         }
         Text {
             text: ta.pressed && !root.fired ? root.holding-text : root.text;
-            color: Theme.accent-strong;
+            color: root.ink;
             font-size: Theme.fs-h2;
             font-weight: 700;
             vertical-alignment: center;
