@@ -42,6 +42,22 @@ def test_ratio_mismatch_raises():
         Recipe.from_dict(_with(ratio=16))  # 16*16=256 != 150
 
 
+def test_ratio_above_the_wire_maximum_raises():
+    # The pours frame carries ratio × 10 in one byte: 150 ml / 5 g = 1:30 would wrap.
+    with pytest.raises(RecipeError, match=r"1:30\.0 is above the machine's 1:25\.5 maximum") as e:
+        Recipe.from_dict(_with(dose_g=5, grind=0))
+    assert "dose_g ≥ 6" in str(e.value)
+
+
+def test_ratio_at_the_wire_maximum_passes():
+    # 153 ml / 6 g = 1:25.5 exactly fits the byte (0xff).
+    r = Recipe.from_dict(_with(dose_g=6, grind=0, pours=[
+        {"ml": 53, "temp_c": 80, "pattern": "center", "pause_s": 30, "rpm": 0, "flow_ml_s": 3.0},
+        {"ml": 100, "temp_c": 80, "pattern": "center", "pause_s": 0, "rpm": 0, "flow_ml_s": 3.0},
+    ]))
+    assert r.effective_ratio == 25.5
+
+
 def test_bad_pattern_raises():
     bad = _with(pours=[
         {"ml": 35, "temp_c": 90, "pattern": "zigzag", "pause_s": 40, "rpm": 100, "flow_ml_s": 3.0},

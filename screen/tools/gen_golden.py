@@ -193,6 +193,10 @@ VALIDATION_CASES = {
         yp(40, 92, "zigzag", rpm=100), yp(200, 92, rpm=100)]},
     "bad_ratio_sum": {"name": "x", "dose_g": 16, "grind": 62, "ratio": 15, "pours": [
         yp(40, 92, rpm=100), yp(100, 92, rpm=100)]},
+    "ok_ratio_cap": {"name": "Tea", "dose_g": 6, "grind": 0, "pours": [
+        yp(53, 80, "center", rpm=0, pause_s=30), yp(100, 80, "center", rpm=0)]},
+    "bad_ratio_cap": {"name": "x", "dose_g": 4, "grind": 0, "pours": [
+        yp(60, 80, "center", rpm=0), yp(61, 80, "center", rpm=0)]},
     "bad_ml": {"name": "x", "dose_g": 16, "grind": 62, "pours": [
         yp(0, 92, rpm=100), yp(4001, 92, rpm=100)]},
     "bad_stage_temp": {"name": "x", "dose_g": 16, "grind": 62, "stage_temps": [131, 39],

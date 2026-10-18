@@ -399,6 +399,21 @@ impl Recipe {
                 ));
             }
         }
+        // Brew-ratio cap: the pours frame carries Σpours / dose × 10 in one byte (see
+        // `protocol::ratio_byte`), so 1:25.5 is the most it can say. Above that the byte
+        // wraps and the machine, which checks it against Σpours / dose, rejects the load.
+        if self.dose_g >= 1 {
+            let ratio10 = round_half_even(total_ml as f64 / f64::from(self.dose_g) * 10.0) as i64;
+            if ratio10 > 255 {
+                errors.push(format!(
+                    "brew ratio 1:{}.{} is above the machine's 1:25.5 maximum (Σpours {total_ml} ml needs \
+                     dose_g ≥ {}, or pour less water)",
+                    ratio10 / 10,
+                    ratio10 % 10,
+                    (total_ml as f64 / 25.5).ceil() as i64
+                ));
+            }
+        }
         for (label, v) in [("water_ml", self.water_ml), ("hot_water_ml", self.hot_water_ml), ("ice_g", self.ice_g)] {
             if let Some(v) = v {
                 if v < 0.0 {
@@ -546,7 +561,9 @@ mod tests {
     fn oversize_pours_fail_validation() {
         let mut r = recipe();
         r.ratio = None;
-        r.pours = vec![pour(4000), pour(4000), pour(4000)];
+        // 40 small pours: 400 ml for 16 g is a fine ratio, but 40 × 8-byte segments
+        // overflow the one-byte body length.
+        r.pours = (0..40).map(|_| pour(10)).collect();
         assert!(r.validate().unwrap_err().0.contains("at most 255"));
     }
 }

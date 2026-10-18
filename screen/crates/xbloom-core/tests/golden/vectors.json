@@ -1619,6 +1619,91 @@
    "error": "\u03a3pours = 140 ml but dose_g*ratio = 16*15 = 240 ml"
   },
   {
+   "name": "ok_ratio_cap",
+   "input": {
+    "name": "Tea",
+    "dose_g": 6,
+    "grind": 0,
+    "pours": [
+     {
+      "ml": 53,
+      "temp_c": 80,
+      "pattern": "center",
+      "rpm": 0,
+      "pause_s": 30
+     },
+     {
+      "ml": 100,
+      "temp_c": 80,
+      "pattern": "center",
+      "rpm": 0
+     }
+    ]
+   },
+   "valid": true,
+   "total_water_ml": 153,
+   "effective_ratio": 25.5,
+   "load_frames": [
+    "580101a41f1400000001b900000001000000bdd1",
+    "580101a61f18000000010000000000000000060000003304",
+    "580101a81f14000000010000dc420000b44221a1",
+    "580101441f1f000000011035500001e200001e645000010000001efeff7fbe"
+   ],
+   "to_dict": {
+    "name": "Tea",
+    "dose_g": 6,
+    "grind": 0,
+    "stage_temps": [
+     110.0,
+     90.0
+    ],
+    "pours": [
+     {
+      "ml": 53,
+      "temp_c": 80,
+      "pattern": "center",
+      "pause_s": 30,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     },
+     {
+      "ml": 100,
+      "temp_c": 80,
+      "pattern": "center",
+      "pause_s": 0,
+      "rpm": 0,
+      "flow_ml_s": 3.0,
+      "agitation": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "bad_ratio_cap",
+   "input": {
+    "name": "x",
+    "dose_g": 4,
+    "grind": 0,
+    "pours": [
+     {
+      "ml": 60,
+      "temp_c": 80,
+      "pattern": "center",
+      "rpm": 0
+     },
+     {
+      "ml": 61,
+      "temp_c": 80,
+      "pattern": "center",
+      "rpm": 0
+     }
+    ]
+   },
+   "valid": false,
+   "error": "brew ratio 1:30.2 is above the machine's 1:25.5 maximum (\u03a3pours 121 ml needs dose_g \u2265 5, or pour less water)"
+  },
+  {
    "name": "bad_ml",
    "input": {
     "name": "x",
@@ -1640,7 +1725,7 @@
     ]
    },
    "valid": false,
-   "error": "pour #1: ml 0 out of range (1\u20134000); pour #2: ml 4001 out of range (1\u20134000)"
+   "error": "pour #1: ml 0 out of range (1\u20134000); pour #2: ml 4001 out of range (1\u20134000); brew ratio 1:250.1 is above the machine's 1:25.5 maximum (\u03a3pours 4001 ml needs dose_g \u2265 157, or pour less water)"
   },
   {
    "name": "bad_stage_temp",

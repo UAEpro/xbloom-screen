@@ -32,6 +32,7 @@ the machine.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -297,6 +298,19 @@ class Recipe:
                 errors.append(
                     f"Σpours = {total_ml} ml but dose_g*ratio = "
                     f"{self.dose_g}*{self.ratio} = {expected} ml"
+                )
+
+        # Brew-ratio cap: the pours frame carries Σpours / dose × 10 in ONE byte (see
+        # protocol._ratio_byte), so 1:25.5 is the most it can say. Above that the byte
+        # wraps, and the machine — which checks it against Σpours / dose — rejects the
+        # load. No-grind (tea) recipes hit this first: raise dose_g to stay in range.
+        if int(self.dose_g) >= 1:
+            ratio10 = round(total_ml / int(self.dose_g) * 10)
+            if ratio10 > 255:
+                errors.append(
+                    f"brew ratio 1:{ratio10 // 10}.{ratio10 % 10} is above the machine's "
+                    f"1:25.5 maximum (Σpours {total_ml} ml needs dose_g ≥ "
+                    f"{math.ceil(total_ml / 25.5)}, or pour less water)"
                 )
 
         # Optional metadata: only sanity-check the numeric ones (not hardware

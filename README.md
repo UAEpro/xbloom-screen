@@ -455,6 +455,7 @@ track real hardware.**
 | `pause_s`     | 0–255          | The wire byte is `256 − seconds` (so 0–255 fits), but the **on-machine countdown caps near 99 s** — treat 0–99 as the practical range. |
 | `ml` (pour)   | 1–4000 ml      | Lower bound (≥1) is firm; a pour **over 127 ml is auto-split** by the protocol (not an error). The 4000 ceiling is just a sanity guard. |
 | `pattern`     | `spiral`, `ring`, `center` | **Firm.** These are the decoded pattern codes; `agitation: true` is only valid with `spiral`. |
+| brew ratio (Σ`ml` / `dose_g`) | up to 1:25.5 | **Firm (wire format).** The pours frame carries the ratio × 10 in one byte, and the machine checks it against Σpours / dose, so a higher ratio can't be loaded. It mostly matters for no-grind recipes such as tea: raise `dose_g` (with the grinder off it is only bookkeeping) to stay in range. |
 
 > **Source:** xBloom Studio published specifications.
 
