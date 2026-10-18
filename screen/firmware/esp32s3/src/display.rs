@@ -1,4 +1,4 @@
-//! The RGB panel (ESP-IDF `esp_lcd`) and its PWM backlight.
+//! The RGB panel (ESP-IDF `esp_lcd`) and its backlight (PWM, or an on/off enable line).
 //!
 //! Two full-screen RGB565 frame buffers live in PSRAM. Slint renders the changed parts of a
 //! frame into the back buffer, then [`Display::present`] hands it to the LCD and waits until
@@ -9,6 +9,7 @@
 use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::Arc;
 
 use esp_idf_svc::hal::gpio::AnyOutputPin;
 use esp_idf_svc::hal::ledc::config::TimerConfig;
@@ -17,7 +18,8 @@ use esp_idf_svc::hal::units::Hertz;
 use esp_idf_svc::sys::{self, esp, EspError};
 use slint::platform::software_renderer::Rgb565Pixel;
 
-use crate::board::Board;
+use crate::board::{Board, Line};
+use crate::io::Lines;
 
 /// Bounce buffer height, lines (two of them, in internal RAM).
 const BOUNCE_LINES: usize = 10;
@@ -140,14 +142,17 @@ impl Display {
     }
 }
 
-/// The backlight, dimmable by PWM.
-pub struct Backlight {
-    pwm: LedcDriver<'static>,
+/// The backlight.
+pub enum Backlight {
+    /// Dimmable by PWM.
+    Pwm(LedcDriver<'static>),
+    /// On or off, through an enable line.
+    Switch(Arc<Lines>, Line),
 }
 
 impl Backlight {
-    /// PWM on `gpio`, starting dark (the first frame turns it on).
-    pub fn new(
+    /// PWM on `gpio`, starting dark (the UI turns it on once it is up).
+    pub fn pwm(
         timer: impl LedcTimer<SpeedMode = LowSpeed> + 'static,
         channel: impl LedcChannel<SpeedMode = LowSpeed> + 'static,
         gpio: u8,
@@ -158,16 +163,28 @@ impl Backlight {
         let pin = unsafe { AnyOutputPin::steal(gpio) };
         let mut pwm = LedcDriver::new(channel, timer, pin)?;
         pwm.set_duty(0)?;
-        Ok(Self { pwm })
+        Ok(Self::Pwm(pwm))
     }
 
-    /// Brightness 0–100 %, on a perceptual (squared) curve; 0 turns the light off.
+    /// An enable line, starting dark (the UI turns it on once it is up).
+    pub fn switch(lines: Arc<Lines>, line: Line) -> Self {
+        lines.set(line, false);
+        Self::Switch(lines, line)
+    }
+
+    /// Brightness 0–100 %, on a perceptual (squared) curve; 0 turns the light off. An
+    /// on/off backlight is on at any brightness above 0.
     pub fn set(&mut self, percent: u8) {
-        let max = self.pwm.get_max_duty();
-        let p = u32::from(percent.min(100));
-        let duty = if p == 0 { 0 } else { (max * p * p / 10_000).max(max / 100).max(1) };
-        if let Err(e) = self.pwm.set_duty(duty) {
-            log::warn!("backlight: {e}");
+        match self {
+            Self::Pwm(pwm) => {
+                let max = pwm.get_max_duty();
+                let p = u32::from(percent.min(100));
+                let duty = if p == 0 { 0 } else { (max * p * p / 10_000).max(max / 100).max(1) };
+                if let Err(e) = pwm.set_duty(duty) {
+                    log::warn!("backlight: {e}");
+                }
+            }
+            Self::Switch(lines, line) => lines.set(*line, percent > 0),
         }
     }
 }

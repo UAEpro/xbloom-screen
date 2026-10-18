@@ -3,7 +3,8 @@
 //! The same product as the Raspberry Pi app — the touchscreen UI, the admin web panel, the
 //! recipe library, dial presets, PIN lock and screensaver — on a microcontroller board. All of
 //! it is the shared crates (`xbloom-core`, `xbloom-app`, `xbloom-ui`); this firmware only adds
-//! the hardware: the RGB panel, GT911 touch, NimBLE, Wi-Fi and the flash file system.
+//! the hardware: the RGB panel, GT911 touch, the board's control lines, NimBLE, Wi-Fi and the
+//! flash file system.
 //!
 //! 🛑 Safety model (unchanged from the shared driver): loading a recipe only arms the machine.
 //! A brew starts only from the "Hold to brew" gesture (when remote start is enabled) or the
@@ -14,6 +15,7 @@ mod board;
 mod display;
 mod hooks;
 mod http;
+mod io;
 mod net;
 mod platform;
 mod storage;
@@ -23,7 +25,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::hal::gpio::AnyIOPin;
+use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::units::Hertz;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sys;
 use slint::ComponentHandle;
@@ -31,7 +36,7 @@ use xbloom_app::settings::Settings;
 use xbloom_app::{App, Data, Event, PlatformInfo, VideoProfile};
 use xbloom_core::sim::SimConfig;
 
-use crate::board::BOARD;
+use crate::board::{Light, BOARD};
 
 /// Give every thread the app spawns (machine controller, screensaver decoder, simulator…) a
 /// stack in PSRAM. Internal RAM is kept for Wi-Fi, Bluetooth, DMA and the UI task. This is
@@ -74,12 +79,26 @@ fn main() {
         xbloom_app::util::read_json(&data.join("settings.json")).ok().flatten().unwrap_or_default();
     apply_timezone(&settings.timezone);
 
+    // The touch I²C bus, also the I/O expander's on boards that have one.
+    // SAFETY: the board reserves these GPIOs for the bus.
+    let (sda, scl) = unsafe { (AnyIOPin::steal(BOARD.touch.sda), AnyIOPin::steal(BOARD.touch.scl)) };
+    let cfg = I2cConfig::new().baudrate(Hertz(400_000)).sda_enable_pullup(true).scl_enable_pullup(true);
+    let bus = Arc::new(Mutex::new(I2cDriver::new(peripherals.i2c0, sda, scl, &cfg).expect("i2c")));
+    let lines = Arc::new(io::Lines::new(Arc::clone(&bus), BOARD.expander).expect("control lines"));
+
     // Display, backlight, touch, and Slint on top.
-    let backlight = display::Backlight::new(peripherals.ledc.timer0, peripherals.ledc.channel0, BOARD.backlight)
-        .expect("backlight");
+    let backlight = match BOARD.backlight {
+        Light::Pwm(gpio) => {
+            display::Backlight::pwm(peripherals.ledc.timer0, peripherals.ledc.channel0, gpio).expect("backlight")
+        }
+        Light::Switch(line) => display::Backlight::switch(Arc::clone(&lines), line),
+    };
     let backlight = Arc::new(Mutex::new(backlight));
+    if let Some(rst) = BOARD.lcd_reset {
+        lines.pulse_low(rst, 10, 100);
+    }
     let panel = display::Display::new(&BOARD).expect("display");
-    let touch = touch::Gt911::new(peripherals.i2c0, &BOARD.touch, panel.size()).expect("touch");
+    let touch = touch::Gt911::new(bus, &lines, &BOARD.touch, panel.size()).expect("touch");
     // The screen as the UI sees it: a quarter turn swaps the sides.
     let size = match panel.size() {
         (w, h) if settings.appearance.rotation % 180 == 90 => (h, w),
@@ -90,15 +109,24 @@ fn main() {
 
     // Wi-Fi (or the setup hotspot), then the app.
     let net = net::Network::start(peripherals.modem, sysloop, nvs, &settings.wifi, data, 80).expect("wifi");
+    // The data partition is ~8.9 MB with 16 MB flash and ~1.9 MB with 8 MB (partitions-8mb.csv):
+    // keep screensaver videos to what fits.
+    let small_flash = storage::usage().is_some_and(|(_, total)| total < 4 << 20);
     let info = PlatformInfo {
         name: "esp32s3".into(),
         screen: size,
         // Half-resolution video: the JPEG decoder keeps ~10 fps, and the screen scales it up.
-        video: VideoProfile { width: size.0 / 2, height: size.1 / 2, fps: 10, quality: 0.7, max_seconds: 30 },
+        video: VideoProfile {
+            width: size.0 / 2,
+            height: size.1 / 2,
+            fps: 10,
+            quality: 0.7,
+            max_seconds: if small_flash { 10 } else { 30 },
+        },
         pin_iterations: 10_000,
         history_max: 200,
         history_points: 160,
-        max_upload: 4_000_000,
+        max_upload: if small_flash { 1_000_000 } else { 4_000_000 },
         version: env!("CARGO_PKG_VERSION").into(),
         can_rotate: true,
     };

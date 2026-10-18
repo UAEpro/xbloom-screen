@@ -40,8 +40,9 @@ The first release.
 
 - **Raspberry Pi** (Zero 2 W, 3B+, 4, 5; 64-bit Raspberry Pi OS Lite): draws straight to
   DRM/KMS, BlueZ for Bluetooth, systemd service and one-line installer.
-- **ESP32-S3** (Sunton ESP32-8048S043C, 4.3" 800 × 480): one flashable image, setup Wi-Fi
-  hotspot with a join QR code, captive portal, SNTP clock. **Experimental: built in CI, not
+- **ESP32-S3**: Sunton ESP32-8048S043C (4.3") or Waveshare ESP32-S3-Touch-LCD-7 (7"), both
+  800 × 480, with 16 MB (N16R8) or 8 MB (N8R8) flash; one flashable image per board and
+  flash size. Setup Wi-Fi hotspot with a join QR code, captive portal, SNTP clock. **Experimental: built in CI, not
   yet tested on hardware.**
 
 ### Under the hood

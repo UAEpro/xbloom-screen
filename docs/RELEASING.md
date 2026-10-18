@@ -58,8 +58,9 @@ separately from the Python package, by the **Screen** workflow (`.github/workflo
   Raspberry Pi binary and the ESP32-S3 image and replaces the rolling **`screen-latest`**
   pre-release. That's what `screen/deploy/install.sh` installs by default.
 - **A `screen-vX.Y.Z` tag** publishes a versioned GitHub Release, titled
-  *xBloom Screen X.Y.Z*, with the same two assets:
-  `xbloom-screen-aarch64-linux.tar.gz` (Pi) and `xbloom-screen-esp32s3.bin` (flash at `0x0`).
+  *xBloom Screen X.Y.Z*, with the same assets: `xbloom-screen-aarch64-linux.tar.gz` (Pi)
+  and ESP32-S3 images for each board and flash size,
+  `xbloom-screen-esp32s3-<board>-{16mb,8mb}.bin` (flash at `0x0`).
 
 To cut one:
 
