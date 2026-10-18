@@ -41,6 +41,34 @@ The TUI is split so it's fully testable without a machine:
 - `tui/editor.py`, `tui/store.py`, `tui/history.py`, `tui/slots.py`, `tui/help.py` —
   recipe editing, the recipe store, brew history, slot programming, help.
 
+### The xBloom Screen (`screen/`)
+
+[xBloom Screen](screen/README.md) is a touchscreen controller for a Raspberry Pi or an
+ESP32-S3, written in Rust + [Slint](https://slint.dev). It is a port of this package's
+protocol, not a wrapper around it, held byte-for-byte to it by golden vectors.
+
+| Path | Responsibility |
+| --- | --- |
+| `screen/crates/xbloom-core` | Protocol frames, recipes + validation, telemetry, the machine driver and a simulated machine. `no_std`, no I/O. |
+| `screen/crates/xbloom-app` | Settings, PIN lock, the recipe / history / preset / media stores, the machine controller thread and the admin HTTP API. |
+| `screen/crates/xbloom-ui` | The Slint UI (`ui/*.slint`, sized through `ui/layout.slint`) and its glue to the app. |
+| `screen/crates/xbloom-screen` | The Raspberry Pi / Linux binary: BlueZ, HTTP server, DRM/KMS. |
+| `screen/firmware/esp32s3` | The ESP32-S3 firmware (its own Cargo project; Xtensa toolchain). |
+| `screen/admin` | The web admin panel (plain JS/CSS), embedded in both binaries. |
+
+```bash
+cd screen
+cargo test --workspace            # no hardware; includes the screen-size test (tests/fit.rs)
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --features xbloom-ui/screenshot -- -D warnings
+cargo run -p xbloom-screen -- --demo   # desktop window + simulated machine
+```
+
+Changed the protocol, recipe validation or telemetry in `xbloom_ble`? Regenerate the
+golden vectors (`python3 screen/tools/gen_golden.py`) and port the change to
+`xbloom-core`. CI fails while they disagree. Changed the UI? Render it at a few panel sizes
+with the screenshot example (see [screen/README.md](screen/README.md#development)).
+
 ## Workflow (PRs + Conventional Commits)
 
 - `main` is protected — land changes via a **pull request**; CI (`ruff` + `pytest` on
@@ -174,6 +202,8 @@ leaks before you push.
       [`docs/REVERSE-ENGINEERING.md`](docs/REVERSE-ENGINEERING.md) updated to match.
 - [ ] New recipe limit? README "Recipe limits & valid ranges" table updated (mark firm
       vs observed honestly).
+- [ ] Touched `screen/`? `cargo test --workspace`, `cargo fmt` and `cargo clippy` pass; a
+      protocol change here also regenerated `screen/tools/gen_golden.py`'s vectors.
 - [ ] PR title is a Conventional Commit; a short, clear description of *what* and *why*.
 - [ ] No personal data anywhere in the diff or attachments.
 

@@ -48,3 +48,35 @@ already configured for `Janczykkkko/xbloom-ble`:**
 `type(optional-scope): summary` — types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
 `build`, `ci`, `chore`, `revert`. Breaking change: append `!` (e.g. `feat!:`) or add a
 `BREAKING CHANGE:` footer. Only `feat`/`fix`/`perf` (and breaking changes) cut a release.
+
+## xBloom Screen releases
+
+The touchscreen controller in [`screen/`](../screen/README.md) is versioned and released
+separately from the Python package, by the **Screen** workflow (`.github/workflows/screen.yml`):
+
+- **Every push to `main`** that touches `screen/` (or the protocol it mirrors) rebuilds the
+  Raspberry Pi binary and the ESP32-S3 image and replaces the rolling **`screen-latest`**
+  pre-release. That's what `screen/deploy/install.sh` installs by default.
+- **A `screen-vX.Y.Z` tag** publishes a versioned GitHub Release, titled
+  *xBloom Screen X.Y.Z*, with the same two assets:
+  `xbloom-screen-aarch64-linux.tar.gz` (Pi) and `xbloom-screen-esp32s3.bin` (flash at `0x0`).
+
+To cut one:
+
+1. Bump `version` in `screen/Cargo.toml` (`[workspace.package]`) and in
+   `screen/firmware/esp32s3/Cargo.toml`, and add the release to
+   [`screen/CHANGELOG.md`](../screen/CHANGELOG.md), in a PR.
+2. Once it is merged, tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git tag -a screen-vX.Y.Z -m "xBloom Screen X.Y.Z" <merge-commit>
+   git push origin screen-vX.Y.Z
+   ```
+
+3. Watch **Actions → Screen** for the tag: the *Publish* job creates the release once both
+   builds pass. To install a release on a Pi, pass `--tag screen-vX.Y.Z` to the installer.
+
+Screen commits use the `screen` scope (`feat(screen): …`). Those PR titles still go through
+semantic-release for the Python package. Where that workflow runs, a `feat(screen)` merge
+also releases a new `xbloom-ble` version.
+

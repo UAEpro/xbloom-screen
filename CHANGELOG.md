@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 [python-semantic-release](https://python-semantic-release.readthedocs.io/) from the
 Conventional-Commit history — new versions are inserted below.
 
+This changelog covers the `xbloom-ble` Python package. The touchscreen controller in
+`screen/` is versioned separately: see [screen/CHANGELOG.md](screen/CHANGELOG.md).
+
 <!-- version list -->
 
 ## v2.3.0 (2026-07-11)

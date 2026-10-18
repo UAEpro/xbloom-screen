@@ -16,6 +16,11 @@ a **Textual TUI** (`xbloom tui`), plus an unofficial cloud client for the phone 
 recipe store. It is a public, MIT-licensed, open-source project with a fully
 documented protocol so others can build on it.
 
+The repo also contains **[xBloom Screen](screen/README.md)** (`screen/`): a Rust + Slint
+touchscreen controller for a Raspberry Pi or an ESP32-S3, with a web admin panel. It is a
+port of the same protocol, held byte-for-byte to this package. See
+[The xBloom Screen](#the-xbloom-screen-screen) below.
+
 ## 🛑 SAFETY INVARIANT — do not break this
 
 **Loading a recipe only *arms* the machine. It must NEVER start a brew as a side
@@ -109,4 +114,36 @@ pytest -q
   was recovered from an Android HCI capture (capture → parse → differential decode →
   validate), so the work is reproducible.
 
-Keep both in sync with any protocol change.
+Keep both in sync with any protocol change — and the Rust port in `screen/` (next
+section).
+
+## The xBloom Screen (`screen/`)
+
+A Cargo workspace (`screen/Cargo.toml`) plus the ESP32-S3 firmware (its own Cargo
+project in `screen/firmware/esp32s3`). Layout and design notes are in
+[`screen/README.md`](screen/README.md#architecture).
+
+- **The safety invariant applies here too.** `xbloom-core`'s `build_load_frames()`
+  returns only `a4, a6, a8` and the pours frame, with the same commit/start/cancel guard;
+  `protocol::tests::load_frames_are_load_only` and `load_frames_opcode_order` mirror the
+  Python tests. The admin HTTP API has **no brew-start endpoint** (a test in
+  `xbloom-app/src/api.rs` checks it); on the device, the deliberate **Hold to brew**
+  gesture is the only way to start. Keep all of that.
+- **Byte parity with this package.** `screen/tools/gen_golden.py` runs `xbloom_ble` over a
+  set of recipes and writes golden vectors (frames, CRCs, telemetry decodes, validation
+  messages) that the Rust tests assert. After **any** change to the protocol, recipe
+  validation or telemetry here, regenerate them (`python3 screen/tools/gen_golden.py`) and
+  port the change to `screen/crates/xbloom-core`; CI runs `gen_golden.py --check`.
+- **Tests:** `cd screen && cargo test --workspace` (no hardware), plus `cargo fmt --all
+  --check` and `cargo clippy --workspace --all-targets --features xbloom-ui/screenshot
+  -- -D warnings`. `crates/xbloom-ui/tests/fit.rs` checks that the essential controls
+  (brew buttons, Stop, PIN keypads, the setup finish button) fit on 12 panel sizes.
+- **UI layout:** components read sizes from the `Layout` global (`ui/layout.slint`), not
+  from hard-coded pixels, so the UI works from 480 × 272 up, landscape or portrait. Check
+  a change with the screenshot example at a few sizes (`cargo run -p xbloom-ui --example
+  screenshots --features screenshot -- /tmp/shots 480x320 quick`).
+- **Firmware:** needs the Xtensa toolchain **1.98.1.0** (`espup`); see
+  `screen/firmware/esp32s3/README.md`. It has not been tested on hardware yet — say so.
+- **Releases** of the screen are separate from the Python package: a `screen-vX.Y.Z` tag
+  (matching `version` in `screen/Cargo.toml` and the firmware's `Cargo.toml`) publishes
+  the Pi binary and the ESP32 image; see [docs/RELEASING.md](docs/RELEASING.md).

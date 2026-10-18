@@ -19,6 +19,8 @@ SupplementaryGroups=video render input bluetooth
 StateDirectory=xbloom-screen
 StateDirectoryMode=0700
 Environment=SLINT_BACKEND=linuxkms-software
+# The screen's rotation is set in the app (Settings → Display). To pin one here instead:
+#Environment=SLINT_KMS_ROTATION=90
 Environment=RUST_LOG=info
 ExecStart=/usr/local/bin/xbloom-screen --port 80
 # Port 80 without root.

@@ -11,8 +11,11 @@ Bluetooth protocol documented in this repository's [main README](../README.md).
 | **Screensaver** | **Settings → Admin panel** |
 | ![Clock screensaver](../docs/img/screen/screensaver-clock-dark.png) | ![QR code for the admin panel](../docs/img/screen/settings-admin-light.png) |
 
-More screens are in [`docs/img/screen/`](../docs/img/screen/). Every screen has a light and
-a dark version, rendered from the real app driving the built-in simulated machine.
+More screens are in [`docs/img/screen/`](../docs/img/screen/), most in light and dark. They
+are rendered from the real app driving the built-in simulated machine.
+
+**Download:** the [releases page](https://github.com/uaepro/xbloom-screen/releases) has the
+Raspberry Pi build and the ESP32-S3 image. What changed is in [CHANGELOG.md](CHANGELOG.md).
 
 > Unofficial: this project is not affiliated with or endorsed by xBloom.
 
@@ -92,6 +95,12 @@ On the ESP32, recipes, history and media live on a ~9 MB flash partition. Screen
 videos are converted at half resolution (400 × 240, 10 fps, up to 30 s) and scaled up on
 the screen.
 
+**Other ESP32 boards.** The firmware needs an ESP32-**S3** with 8 MB PSRAM, 16 MB flash and
+a parallel-RGB panel. The classic ESP32 (ESP-WROOM-32 modules, "Cheap Yellow Display"
+boards) has no PSRAM and no RGB LCD controller, and usually 4 MB of flash, less than the
+firmware image alone. It is not supported (see the [roadmap](../ROADMAP.md) for a possible
+headless build).
+
 ## Screen sizes and orientation
 
 The UI is designed at 800 × 480 (the official 7" Pi display and the common 4.3"–7" ESP32-S3
@@ -115,10 +124,11 @@ or smaller, from 70 % to 200 %. Use it for dense panels, such as a 5" 720 × 128
 
 **Rotation** (0°, 90°, 180° or 270°, clockwise) turns both the picture and the touch input,
 for a panel mounted on its side or upside down. The app restarts to apply it. It is offered
-on the kiosk Pi and on the ESP32; a desktop rotates its own windows. On the Pi,
-`SLINT_KMS_ROTATION` in the service file overrides the setting, and a touch calibration set
-in udev (`LIBINPUT_CALIBRATION_MATRIX`) is kept, with the rotation applied on top of it. If a
-rotation leaves the screen hard to use, change it back from the admin panel.
+on the kiosk Pi and on the ESP32; a desktop rotates its own windows. On the Pi, a
+`SLINT_KMS_ROTATION` line in the systemd service (there's a commented example in it)
+overrides the setting. A touch calibration set in udev (`LIBINPUT_CALIBRATION_MATRIX`) is
+kept, with the rotation applied on top of it. If a rotation leaves the screen hard to use,
+change it back from the admin panel.
 
 ## Install
 
@@ -152,8 +162,9 @@ Logs: `journalctl -u xbloom-screen -f`.
 
 ### ESP32-S3
 
-1. Download `xbloom-screen-esp32s3.bin` from the
-   [latest build](https://github.com/uaepro/xbloom-screen/releases/tag/screen-latest).
+1. Download `xbloom-screen-esp32s3.bin` from a
+   [release](https://github.com/uaepro/xbloom-screen/releases) (or the
+   [latest build of `main`](https://github.com/uaepro/xbloom-screen/releases/tag/screen-latest)).
 2. Flash it **at address 0x0**. It's a merged image with the bootloader, partition table
    and app. You can use [Espressif's web flasher](https://espressif.github.io/esptool-js/)
    in Chrome/Edge, or from a terminal:
@@ -215,6 +226,13 @@ Both targets run **the same code**: protocol, app logic, API, UI and admin panel
 target only adds its own hardware glue: a Bluetooth transport, an HTTP server adapter, and
 hooks for the display, backlight and storage.
 
+**One UI for every screen.** Components size themselves from the `Layout` global
+(`crates/xbloom-ui/ui/layout.slint`). It derives size classes (short, narrow, portrait,
+large) and layout measures from the window, after the interface-size setting. A test
+(`crates/xbloom-ui/tests/fit.rs`) lays the UI out at 12 panel sizes and fails if the brew
+buttons, Stop, the PIN keypads or the setup button leave the screen or get too small to
+tap.
+
 **Byte-for-byte parity with the Python package.** `tools/gen_golden.py` runs the Python
 reference (`xbloom_ble`, whose frames were checked against real captures) over a broad set
 of recipes. It records every frame, CRC, telemetry decode and validation message. The Rust
@@ -250,7 +268,7 @@ need a Slint commercial licence.
 
 ```bash
 cd screen
-cargo test --workspace                       # all tests (no hardware needed)
+cargo test --workspace                       # all tests, incl. the screen-size test (no hardware)
 cargo run -p xbloom-screen -- --demo         # run in a desktop window, simulated machine
                                              # admin panel on http://localhost:8080
 cargo run -p xbloom-ui --example screenshots --features screenshot -- ../docs/img/screen
@@ -277,5 +295,6 @@ cargo build --release
 espflash flash --monitor target/xtensa-esp32s3-espidf/release/xbloom-screen-esp32s3
 ```
 
-**Releases.** CI builds both targets on every push. Pushes to `main` update the rolling
-`screen-latest` pre-release. A `screen-vX.Y.Z` tag makes a versioned release.
+**Releases.** CI checks and builds both targets on every pull request and push to `main`.
+Pushes to `main` update the rolling `screen-latest` pre-release; a `screen-vX.Y.Z` tag makes a
+versioned release (see [docs/RELEASING.md](../docs/RELEASING.md#xbloom-screen-releases)).
