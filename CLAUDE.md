@@ -152,8 +152,8 @@ project in `screen/firmware/esp32s3`). Layout and design notes are in
   hardware yet — say so.
 - **Case:** `screen/hardware/waveshare-7-case/case.py` (CadQuery) generates the printable
   STL/STEP files for the Waveshare 7" board. After changing a parameter, rerun it and keep
-  `python3 case.py --check` passing. Never let a screw reach closer to the LCD's back than
-  it does now (the check fails under 0.5 mm). It hasn't been test-printed yet — say so.
+  `python3 case.py --check` passing. Keep the screw tips well clear of the LCD's back (the
+  check fails under 0.5 mm). It hasn't been test-printed yet — say so.
 - **Releases** of the screen are separate from the Python package: a `screen-vX.Y.Z` tag
   (matching `version` in `screen/Cargo.toml` and the firmware's `Cargo.toml`) publishes
   the Pi binary and the ESP32 image; see [docs/RELEASING.md](docs/RELEASING.md).

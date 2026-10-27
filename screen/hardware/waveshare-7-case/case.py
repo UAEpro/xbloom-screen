@@ -5,8 +5,8 @@ The board ships as a bare cover glass with the LCD and the driver board on its b
 script builds three parts with CadQuery and writes them as STL (oriented for printing) and
 STEP (for editing in other CAD tools):
 
-* ``back-case``: a shell that the cover glass drops into, held by four M3 × 12 screws in
-  the brass inserts on the LCD's back. A window in the left side wall (seen from the back)
+* ``back-case``: a shell that the cover glass drops into, held by four short M3 screws in
+  the risers (standoffs) on the LCD's back. A window in the left side wall (seen from the back)
   lines up with both USB-C ports, so a straight USB-C cable plugs in with the case closed.
 * ``stand``: a cradle that holds the case at a fixed angle. Gravity keeps the case in it;
   lift the screen out to unplug it or press RESET / BOOT.
@@ -51,7 +51,13 @@ LCD_Y = (-47.44, 50.16)
 LCD_BACK_Z = 5.0  # "TP + LCD = 5.00"
 # The four M3 brass inserts in white blocks on the LCD's back: 126.20 × 65.65 apart.
 INSERTS = [(x, y) for x in (-61.57, 64.63) for y in (-33.80, 31.85)]
-INSERT_TOP_Z = 8.3  # glass front → top of the inserts. Measure yours (see the README).
+INSERT_TOP_Z = 8.3  # glass front → top of the inserts
+# M3 risers (hex standoffs) screwed into the inserts: 8 mm on Waveshare's drawing. Their tops
+# are what the case screws into. Set 0 for a board without them: the posts then reach down
+# to the inserts and take longer screws.
+RISER_LEN = 8.0
+RISER_D = 6.4  # across the hex corners
+MOUNT_TOP_Z = INSERT_TOP_Z + RISER_LEN  # glass front → top of a riser. Measure yours.
 # The driver board: Waveshare's STEP model, moved into the device frame.
 PCB_OFFSET = (-55.04, -47.30, 10.1)  # where the model's origin lands (its top face is z = 0)
 PCB_X = (PCB_OFFSET[0], PCB_OFFSET[0] + 106.01)
@@ -83,18 +89,20 @@ OUTER_R = GLASS_R + POCKET_CLEAR + FRAME
 BACK_EDGE_CHAMFER = 1.5  # 45°, so the edge on the print bed needs no support
 FRONT_EDGE_CHAMFER = 0.6
 
-# Screw posts. The screw head sits deep in the post, so an M3 × 12 reaches only SCREW_ENGAGE
-# into the insert and its tip stays clear of the LCD's back (checked below).
-SCREW_LEN = 12.0
-SCREW_ENGAGE = 2.2
+# Screw posts. With risers they are short stubs and an M3 × 6 goes 3 mm into each riser.
+# Without, they reach down to the inserts and the screw head sits deep in the post, so an
+# M3 × 12 goes only 2.2 mm into the insert and its tip stays clear of the LCD's back.
+# (Checked below.)
+SCREW_LEN = 6.0 if RISER_LEN else 12.0
+SCREW_ENGAGE = 3.0 if RISER_LEN else 2.2
 SCREW_HOLE_D = 3.5
 HEAD_BORE_D = 6.8  # M3 socket head (5.5 mm) or button head (5.7 mm)
 POST_D = 10.0
 POST_LOW_D = 7.0  # the post narrows near the driver board
 POST_STEP_Z = 13.0
-POST_GAP = 1.0  # between the post's end and the insert
-POST_END_Z = INSERT_TOP_Z + POST_GAP
-SEAT_Z = INSERT_TOP_Z + SCREW_LEN - SCREW_ENGAGE
+POST_GAP = 1.0  # between the post's end and the riser (or insert)
+POST_END_Z = MOUNT_TOP_Z + POST_GAP
+SEAT_Z = MOUNT_TOP_Z + SCREW_LEN - SCREW_ENGAGE
 # A thin skin across the bottom of each head bore, so the slicer can bridge it; the screw
 # (or a 3 mm drill) pokes through it.
 SKIN = 0.3
@@ -207,11 +215,11 @@ def back_case() -> cq.Shape:
         box(FLEX_X[0], FLEX_X[1], top - 0.01, top + FLEX_RELIEF, GLASS_T, FLEX_RELIEF_Z)
     )
 
-    # Screw posts.
+    # Screw posts (narrower near the driver board when they reach that far down).
     for x, y in INSERTS:
-        post = cylinder_z(x, y, POST_D, POST_STEP_Z, BACK_IN_Z + 0.5).fuse(
-            cylinder_z(x, y, POST_LOW_D, POST_END_Z, POST_STEP_Z + 0.01)
-        )
+        post = cylinder_z(x, y, POST_D, max(POST_STEP_Z, POST_END_Z), BACK_IN_Z + 0.5)
+        if POST_END_Z < POST_STEP_Z:
+            post = post.fuse(cylinder_z(x, y, POST_LOW_D, POST_END_Z, POST_STEP_Z + 0.01))
         case = case.fuse(post)
     for x, y in INSERTS:
         case = case.cut(cylinder_z(x, y, SCREW_HOLE_D, POST_END_Z - 1, SEAT_Z - SKIN))
@@ -351,6 +359,17 @@ def for_stand(part: cq.Shape, g: dict) -> cq.Shape:
     return moved.translate(cq.Vector(0, fy + 0.01 * u[0], fz + 0.01 * u[1]))
 
 
+def mounts() -> list[cq.Shape]:
+    """The insert blocks on the LCD's back, each with its riser (for the checks and renders)."""
+    out = []
+    for x, y in INSERTS:
+        block = box(x - 6, x + 6, y - 3.5, y + 3.5, LCD_BACK_Z, INSERT_TOP_Z)
+        if RISER_LEN:
+            block = block.fuse(cylinder_z(x, y, RISER_D, INSERT_TOP_Z, MOUNT_TOP_Z))
+        out.append(block)
+    return out
+
+
 def for_printing(case: cq.Shape) -> cq.Shape:
     """Turn a case part over so its back lies on the print bed."""
     return case.rotate(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), 180).translate(
@@ -377,12 +396,12 @@ def check(case: cq.Shape, stand_part: cq.Shape, board_step: Path | None) -> list
     def gap(a: cq.Shape, b: cq.Shape) -> float:
         return a.distance(b)
 
-    # The screen itself, simplified: the glass, the LCD, the insert blocks.
+    # The screen itself, simplified: the glass, the LCD, the insert blocks and their risers.
     glass = rounded_box(GLASS_W, GLASS_H, GLASS_R, 0, GLASS_T)
     lcd = box(LCD_X[0], LCD_X[1], LCD_Y[0], LCD_Y[1], GLASS_T, LCD_BACK_Z)
-    blocks = [box(x - 6, x + 6, y - 3.5, y + 3.5, LCD_BACK_Z, INSERT_TOP_Z) for x, y in INSERTS]
+    blocks = mounts()
     for name, part in [("glass", glass), ("LCD", lcd)] + [
-        (f"insert block {i + 1}", b) for i, b in enumerate(blocks)
+        (f"insert {i + 1}", b) for i, b in enumerate(blocks)
     ]:
         v = overlap(case, part)
         if v > 1e-3:
@@ -390,14 +409,18 @@ def check(case: cq.Shape, stand_part: cq.Shape, board_step: Path | None) -> list
     ledge = RIM - RIM_RELIEF
     info.append(f"glass in its pocket: {POCKET_CLEAR:g} mm round its edge, on a {ledge:g} mm ledge")
     info.append(f"LCD to the case: {gap(case, lcd):.2f} mm")
-    info.append(f"post ends to the inserts: {min(gap(case, b) for b in blocks):.2f} mm")
+    into = "riser" if RISER_LEN else "insert"
+    info.append(f"post ends to the {into}s: {min(gap(case, b) for b in blocks):.2f} mm")
 
     # The screws: the tip must stay clear of the LCD's back.
     tip = SEAT_Z - SCREW_LEN
+    head = BACK_OUT_Z - SEAT_Z
     info.append(
-        f"M3 × {SCREW_LEN:g}: {SCREW_ENGAGE:g} mm into the insert, "
-        f"tip {tip - LCD_BACK_Z:.2f} mm above the LCD back"
+        f"M3 × {SCREW_LEN:g}: {SCREW_ENGAGE:g} mm into the {into}, "
+        f"tip {tip - LCD_BACK_Z:.2f} mm above the LCD back, head bore {head:.1f} mm deep"
     )
+    if head < 3.0:
+        problems.append("a socket-head screw would stand proud of the back")
     if tip - LCD_BACK_Z < 0.5:
         problems.append("the screw tip comes within 0.5 mm of the LCD's back")
 

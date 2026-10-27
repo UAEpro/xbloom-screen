@@ -6,8 +6,8 @@ stay usable with the case closed.
 
 ![The screen in its case, on the stand, with a USB-C cable in the side](img/assembled.jpg)
 
-- **Back case**: the glass drops into a pocket, so its edges are covered. Four M3 screws
-  go into the brass inserts on the back of the LCD. A window in the side wall lines up with
+- **Back case**: the glass drops into a pocket, so its edges are covered. Four short M3
+  screws go into the risers (hex standoffs) on the back of the LCD. A window in the side wall lines up with
   both USB-C ports (`UART1` and `USB`), so a straight USB-C cable plugs straight in. There
   are vents in the back and pin holes for **RESET** and **BOOT** in the bottom edge.
 - **Stand**: a cradle that holds the screen leaning back at 65°. The case just sits in it,
@@ -29,15 +29,20 @@ stay usable with the case closed.
 | | |
 | --- | --- |
 | Prints | [`stl/back-case.stl`](stl/back-case.stl), [`stl/stand.stl`](stl/stand.stl), and first [`stl/fit-test.stl`](stl/fit-test.stl) |
-| Screws | 4 × **M3 × 12 mm**, socket head (ISO 4762) or button head (ISO 7380). **Not longer** (see below) |
+| Screws | 4 × **M3 × 6 mm**, socket head (ISO 4762) or button head (ISO 7380) |
 | Cable | A USB-C cable with a **straight** plug whose moulded body is at most 14.8 × 9.5 mm (most are 12–13 × 6.5–8 mm) |
 | Optional | 4 stick-on rubber feet, up to 10 mm across, for the stand |
 | Printer | A bed of at least 200 × 120 mm (the case is 197.5 × 115.3 × 22.4 mm) |
 
-> 🛑 **Use M3 × 12 screws, no longer.** The screw heads sit deep in the case so that a 12 mm
-> screw goes 2.2 mm into the insert and its tip stops about 1 mm short of the LCD's metal
-> back. A longer screw can press on the back of the panel and damage it. Tighten the
-> screws gently: the inserts are small.
+The case screws onto the four 8 mm M3 risers that stand on the brass inserts on the
+LCD's back. The risers give the height, so the screws are short: an M3 × 6 goes 3 mm into
+a riser and stays more than 8 mm clear of the panel. The heads sit flush in the back.
+Tighten them gently.
+
+No risers on your board? Set `RISER_LEN = 0` in [`case.py`](case.py) and rebuild (see
+[Changing the design](#changing-the-design)). The posts then reach down to the inserts
+and take M3 × 12 screws. Don't go longer than that, or the tip can press on the back of
+the panel.
 
 ## Printing
 
@@ -46,7 +51,7 @@ for printing: the case lies on its back, the stand on its base.
 
 | Part | Size (mm) | Filament (PETG) | Time (PrusaSlicer estimate) |
 | --- | --- | --- | --- |
-| Back case | 197.5 × 115.3 × 22.4 | ≈ 102 g | ≈ 10 h |
+| Back case | 197.5 × 115.3 × 22.4 | ≈ 100 g | ≈ 9.5 h |
 | Stand | 120 × 75 × 49 | ≈ 62 g | ≈ 5 h |
 | Fit test | 59 × 115 × 22.4 | ≈ 34 g | ≈ 3 h |
 
@@ -64,9 +69,10 @@ takes a fraction of that.
 1. **Check the board revision.** It's printed on the driver board next to "800×480
    Pixels". The case is made for **Rev1.2**. Another revision may have its USB ports
    elsewhere.
-2. **Measure the inserts.** Lay the screen face down on a table and measure from the table
-   to the top of one brass insert. The case expects **8.3 mm**. If yours differs by more
-   than 0.5 mm, change `INSERT_TOP_Z` in [`case.py`](case.py) and rebuild the files (see
+2. **Measure a riser.** Lay the screen face down on a table and measure from the table to
+   the top of one riser. The case expects **16.3 mm** (8.3 mm to the top of the insert,
+   plus the 8 mm riser). If yours differs by more than 0.5 mm, change `INSERT_TOP_Z` or
+   `RISER_LEN` in [`case.py`](case.py) and rebuild the files (see
    [Changing the design](#changing-the-design)).
 3. **Print the fit test.** Put the USB end of the screen into it and fit the two screws.
    Check that the glass sits flat in the pocket, the screws grip, and a USB-C cable plugs
@@ -77,7 +83,7 @@ takes a fraction of that.
 1. Lay the screen face down on a soft cloth.
 2. Lower the case onto it, back up, with the cable window on the same side as the USB
    ports. The glass drops into the pocket.
-3. Fit the four M3 × 12 screws. Tighten them until the case sits on the glass, no more.
+3. Fit the four M3 × 6 screws. Tighten them until the case sits on the glass, no more.
 4. Push the cable through the window into either USB-C port. Both power the board, and
    both can flash it.
 5. Stand the screen in the stand, bottom edge in the slot. The bottom edge is the one with
@@ -112,15 +118,15 @@ The 3D model is `esp32-s3-touch-lcd-7.stp` in the "3D drawing" zip on
 [Waveshare's wiki page](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-7). It isn't in
 this repo.
 
-`--check` fails if the case touches the glass, the LCD, the insert blocks or any of the
+`--check` fails if the case touches the glass, the LCD, the risers or any of the
 board's 833 parts. It also fails if a USB-C plug can't go in through the window, if a
 screw tip comes within 0.5 mm of the LCD, if the case doesn't fit the stand, or if the
 stand covers the vents. For the current design it reports:
 
 ```
 LCD to the case: 2.82 mm
-post ends to the inserts: 1.00 mm
-M3 × 12: 2.2 mm into the insert, tip 1.10 mm above the LCD back
+post ends to the risers: 1.00 mm
+M3 × 6: 3 mm into the riser, tip 8.30 mm above the LCD back, head bore 3.1 mm deep
 UART1: a 14.8 × 9.5 mm plug fits
 USB: a 14.8 × 9.5 mm plug fits
 driver board: 833 parts, the closest 1.60 mm from the case
@@ -138,8 +144,8 @@ stand: centre of mass 46 mm behind the toe, 30 mm in front of the heel
 | M3 inserts | 126.20 × 65.65 mm apart; 31.85 / 21.58 mm from the glass edges | drawing |
 | Driver board, USB-C ports, buttons, tallest part (18.4 mm from the glass front) | | Waveshare's STEP model (Rev 1.2 layout) |
 | Where the board sits | its holes 29.10 / 5.80 mm from the inserts; 15.44 / 19.3 mm from its edges | drawing. The wiki's back-view picture puts the 5.80 mm label on the wrong side; the product photos agree with the drawing |
-| Top of the inserts | ≈ 8.3 mm from the glass front | measured off the drawing's side view. **Check yours** |
-| Glass thickness | 0.7 mm assumed | not on the drawing. A thicker glass only sits a little proud of the frame and keeps the screws further from the LCD |
+| Risers | 8.00 mm, so their tops are ≈ 16.3 mm from the glass front | the drawing's side view (the 8.3 mm to the insert top is measured off it). **Check yours** |
+| Glass thickness | 0.7 mm assumed | not on the drawing. A thicker glass only sits a little proud of the frame and moves the case further back |
 
 The pictures are renders of the CAD model, with a simplified glass, LCD and cable. The
 cut-away also shows Waveshare's model of the driver board.
