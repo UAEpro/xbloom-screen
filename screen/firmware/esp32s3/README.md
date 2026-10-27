@@ -49,7 +49,13 @@ port keeps working.
   in PSRAM. The rest holds the two 750 KB frame buffers and ~1.5 MB of heap: screensaver
   frames, Wi-Fi buffers, the app. Code size is PSRAM, so the release build is optimized for
   size (`opt-level = "z"`).
-- **Internal RAM:** the UI task (32 KB stack), Wi-Fi/BLE controllers, DMA bounce buffers.
+- **Internal RAM:** Wi-Fi/BLE controllers, DMA bounce buffers, and an 8 KB main task that only
+  sets up NVS and the data partition, then starts the UI thread. The UI thread's 64 KB stack is
+  in PSRAM: the software renderer needs ~32 KB, more than internal RAM can spare next to Wi-Fi
+  and Bluetooth. Flash writes from PSRAM stacks are fine here (the cache stays on), but
+  *mapping* flash freezes the cache, so the first partition lookup stays on the main task.
+  Plain `malloc()` goes to PSRAM first (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0`): Slint allocates
+  a small node per property a binding reads, and thousands of those used up internal RAM.
 
 ## Porting to another board
 
@@ -69,4 +75,6 @@ needs no code: set **Rotation** in Settings → Display, and the renderer turns 
 - The Xtensa toolchain is pinned to **1.98.1.0**. Toolchain 1.97 aborts in LLVM on selects
   between two float constants ("Cannot select XtensaISD::PCREL_WRAPPER"), and Slint UIs are
   full of those. Toolchain 1.99's `std` doesn't build for ESP-IDF.
-- ESP-IDF **v5.5.6** is downloaded on the first build (set in `.cargo/config.toml`).
+- ESP-IDF **v5.5.5** is downloaded on the first build (set in `.cargo/config.toml`). Not v5.5.6:
+  it adds a Wi-Fi init field (`wifi_task_stack_size`) that esp-idf-svc 0.53 leaves at 0, and the
+  firmware then boot-loops with `wifi: ESP_ERR_NO_MEM`.

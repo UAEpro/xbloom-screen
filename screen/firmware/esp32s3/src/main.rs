@@ -38,10 +38,10 @@ use xbloom_core::sim::SimConfig;
 
 use crate::board::{Light, BOARD};
 
-/// Give every thread the app spawns (machine controller, screensaver decoder, simulator…) a
-/// stack in PSRAM. Internal RAM is kept for Wi-Fi, Bluetooth, DMA and the UI task. This is
-/// safe because code and constants run from PSRAM (`CONFIG_SPIRAM_XIP_FROM_PSRAM`), so flash
-/// writes don't disable the cache under those stacks.
+/// Give every thread the app spawns (UI, machine controller, screensaver decoder, simulator…) a
+/// stack in PSRAM. Internal RAM is kept for Wi-Fi, Bluetooth and DMA. This is safe because code
+/// and constants run from PSRAM (`CONFIG_SPIRAM_XIP_FROM_PSRAM`), so flash writes don't disable
+/// the cache under those stacks.
 fn psram_thread_stacks() {
     // SAFETY: plain ESP-IDF configuration calls on the current task.
     unsafe {
@@ -68,12 +68,33 @@ fn main() {
 
     let peripherals = Peripherals::take().expect("peripherals");
     let sysloop = EspSystemEventLoop::take().expect("event loop");
+    // The first partition lookup maps the partition table into memory, which freezes the cache
+    // and so must run on a task whose stack is in internal RAM: this one, not the UI thread.
     let nvs = EspDefaultNvsPartition::take().expect("nvs");
-
     // Data partition (settings, recipes, history, media).
     if let Err(e) = storage::mount() {
         log::error!("storage: can't mount the data partition: {e}");
     }
+
+    // The Slint software renderer is stack-hungry: 32 KB had ~1.3 KB left after the first frame
+    // and the first touch overflowed it. The main task's stack has to be internal RAM, which
+    // Wi-Fi and Bluetooth need, so the UI runs on a thread with a bigger stack in PSRAM.
+    let ui = std::thread::Builder::new()
+        .name("xbloom-ui".into())
+        .stack_size(UI_STACK)
+        .spawn(move || run(peripherals, sysloop, nvs));
+    if let Err(e) = ui.map(|t| t.join()) {
+        log::error!("ui thread: {e}");
+    }
+    // SAFETY: plain reboot; the UI thread only ends on a fatal error.
+    unsafe { sys::esp_restart() };
+}
+
+/// UI thread stack, bytes (in PSRAM).
+const UI_STACK: usize = 64 * 1024;
+
+/// Bring up the hardware, Wi-Fi and the app, then run the UI. Runs on the UI thread.
+fn run(peripherals: Peripherals, sysloop: EspSystemEventLoop, nvs: EspDefaultNvsPartition) {
     let data = Path::new(storage::DATA_DIR);
     let settings: Settings =
         xbloom_app::util::read_json(&data.join("settings.json")).ok().flatten().unwrap_or_default();

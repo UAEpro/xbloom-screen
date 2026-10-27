@@ -12,8 +12,10 @@ build-std = ["std", "panic_abort"]
 
 [env]
 MCU = "esp32s3"
-# ESP-IDF release the firmware is built and tested against.
-ESP_IDF_VERSION = "v5.5.6"
+# ESP-IDF release the firmware is built and tested against. Not v5.5.6: it adds
+# `wifi_init_config_t::wifi_task_stack_size`, which esp-idf-svc 0.53 leaves at 0, so the Wi-Fi
+# task can't be created (ESP_ERR_NO_MEM at start-up, a boot loop).
+ESP_IDF_VERSION = "v5.5.5"
 # Install the ESP-IDF tools once per machine (~/.espressif), not inside the repo.
 ESP_IDF_TOOLS_INSTALL_DIR = "global"
 ESP_IDF_SDKCONFIG_DEFAULTS = "sdkconfig.defaults"

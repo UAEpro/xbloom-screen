@@ -301,7 +301,7 @@ libfontconfig-dev libdbus-1-dev pkg-config`.
 
 **ESP32-S3 firmware.** It needs the Xtensa Rust toolchain from
 [`espup`](https://github.com/esp-rs/espup), version **1.98.1.0** (1.97 hits an Xtensa LLVM
-bug on float selects; 1.99's `std` doesn't build for ESP-IDF), and ESP-IDF v5.5.6, which is
+bug on float selects; 1.99's `std` doesn't build for ESP-IDF), and ESP-IDF v5.5.5, which is
 fetched automatically on the first build.
 
 ```bash

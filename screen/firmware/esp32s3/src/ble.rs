@@ -33,7 +33,7 @@ pub struct NimbleTransport {
     kinds: HashMap<String, u8>,
 }
 
-// SAFETY: the transport is created on the main task and from then on used only by the
+// SAFETY: the transport is created on the UI thread and from then on used only by the
 // machine-controller thread; NimBLE's own callbacks touch only the channel and the flag.
 unsafe impl Send for NimbleTransport {}
 
