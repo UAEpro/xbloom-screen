@@ -127,6 +127,11 @@ the screensaver's dimming step have no effect; the screen still turns off when i
 The Waveshare ESP32-S3-Touch-LCD-**7B** (1024 × 600) is a different board and needs its own
 entry.
 
+**A case for the Waveshare board.** It comes without one, so
+[`hardware/waveshare-7-case/`](hardware/waveshare-7-case/) has a 3D-printable back case and a
+desk stand. The USB-C ports stay usable through a window in the side, and nothing needs
+supports. It hasn't been test-printed yet, so print its fit test first.
+
 > ⚠️ The ESP32 firmware compiles in CI from the same code as the Pi app, but **it has not yet
 > been tested on real hardware**. The pin maps and panel timings come from the vendors'
 > board configurations. If you try it, please open an issue with what you see. Other
