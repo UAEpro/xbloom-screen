@@ -14,7 +14,8 @@ use crate::io::{Bus, Lines, TIMEOUT};
 const REG_PRODUCT_ID: u16 = 0x8140;
 const REG_X_MAX: u16 = 0x8048;
 const REG_STATUS: u16 = 0x814E;
-const REG_POINT1: u16 = 0x8150;
+/// First touch point: track id, then X and Y (little-endian), size.
+const REG_POINT1: u16 = 0x814F;
 
 /// The touch controller.
 pub struct Gt911 {

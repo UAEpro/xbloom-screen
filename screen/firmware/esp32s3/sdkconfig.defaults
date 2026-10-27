@@ -9,13 +9,21 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
+# --- Console -------------------------------------------------------------------------------
+# Log on the chip's own USB (the port used for flashing). On some boards the UART Type-C port
+# isn't wired to UART0, so the default UART console prints nowhere.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
 # --- PSRAM ---------------------------------------------------------------------------------
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_MALLOC=y
-# Small allocations stay internal (fast); keep 64 KB of internal RAM for DMA / Wi-Fi / BLE.
-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024
+# Plain malloc() goes to PSRAM first. Slint allocates a 16-byte node for every property a binding
+# reads, thousands of them, and with the default threshold they used up internal RAM (demo mode
+# crashed). Code that needs internal or DMA memory asks for it explicitly. Keep 64 KB of internal
+# RAM for DMA / Wi-Fi / BLE.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=65536
 # Run code and constants from PSRAM: flash writes (saving settings, uploads) then don't stall
 # the display, and thread stacks may live in PSRAM.
@@ -28,8 +36,9 @@ CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 
 # --- Tasks ---------------------------------------------------------------------------------
-# The main task runs the Slint UI.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=32768
+# The main task only starts the UI thread (its stack is in PSRAM, see main.rs); internal RAM is
+# kept for Wi-Fi and Bluetooth.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_FREERTOS_HZ=1000
 CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=8192
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
