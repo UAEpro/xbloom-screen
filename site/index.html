@@ -1,0 +1,1059 @@
+<meta charset="utf-8">
+<title>xBloom Screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A 7-inch touchscreen controller for the xBloom Studio coffee machine. Pre-order now.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Readex+Pro:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dark roast "counter-top" page; one live 3D device in the hero, then
+   alternating text/screen bands, ending in the pre-order form. Single dark look by choice. */
+:root {
+  --roast: #110c09;        /* page ground */
+  --roast-2: #1b1410;      /* raised surface */
+  --roast-3: #261c16;      /* hover / input */
+  --line: #3a2c23;         /* hairlines */
+  --crema: #f3e6d4;        /* main text */
+  --crema-dim: #b9a593;    /* secondary text */
+  --copper: #d9773f;       /* accent: the app's own brew colour */
+  --copper-hi: #f09358;
+  --water: #5aaee8;        /* telemetry blue, used sparingly */
+  --ok: #4fbf87;
+  --bad: #ef6f62;
+
+  --f-display: "Bricolage Grotesque", "Readex Pro", system-ui, sans-serif;
+  --f-body: "Readex Pro", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --s-1: clamp(2.6rem, 6.2vw, 5.4rem);
+  --s-2: clamp(1.9rem, 3.6vw, 3rem);
+  --s-3: 1.3rem;
+  --s-body: 1.05rem;
+  --s-small: .86rem;
+  --radius: 18px;
+  --wrap: 1180px;
+  color-scheme: dark;
+}
+:root[lang="ar"] { --f-display: "Readex Pro", system-ui, sans-serif; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+:root[dir="rtl"] svg[data-icon="arrow"] { transform: scaleX(-1); }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--roast);
+  color: var(--crema);
+  font: 400 var(--s-body)/1.6 var(--f-body);
+  overflow-x: hidden;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 60; background: var(--roast);
+}
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.05; }
+h1 { font-size: var(--s-1); font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: var(--s-2); font-weight: 800; letter-spacing: -.02em; }
+h3 { font-size: var(--s-3); font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
+:root[lang="ar"] h1, :root[lang="ar"] h2 { letter-spacing: 0; line-height: 1.25; font-weight: 700; }
+p { margin: 0; }
+.wrap {
+  max-width: var(--wrap); margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.eyebrow {
+  font: 600 .74rem/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--copper-hi);
+}
+:root[lang="ar"] .eyebrow { font-family: var(--f-body); letter-spacing: 0; font-size: .9rem; }
+.lede { color: var(--crema-dim); font-size: 1.15rem; max-width: 34em; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: .55em; justify-content: center;
+  padding: .85em 1.4em; border-radius: 999px; border: 1px solid transparent;
+  font: 600 1rem/1 var(--f-body); text-decoration: none; cursor: pointer;
+  transition: transform .2s, background .2s, border-color .2s, box-shadow .2s;
+}
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--water); outline-offset: 3px;
+}
+.btn-primary { background: var(--copper); color: #1a0e07; box-shadow: 0 10px 30px -10px rgba(217,119,63,.7); }
+.btn-primary:hover { background: var(--copper-hi); transform: translateY(-2px); }
+.btn-ghost { border-color: var(--line); color: var(--crema); background: transparent; }
+.btn-ghost:hover { border-color: var(--crema-dim); }
+
+/* Header */
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50;
+  background: color-mix(in srgb, var(--roast) 82%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.top .wrap { display: flex; align-items: center; gap: 16px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 800 1.15rem/1 var(--f-display); }
+.brand-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--copper); display: grid; place-items: center; color: #1a0e07; }
+.brand-mark svg { width: 20px; height: 20px; }
+nav.links { display: flex; gap: 22px; margin-inline-start: auto; font-size: .95rem; }
+nav.links a { text-decoration: none; color: var(--crema-dim); }
+nav.links a:hover { color: var(--crema); }
+.lang {
+  display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px;
+}
+.lang button {
+  border: 0; background: transparent; color: var(--crema-dim); font: 600 .85rem/1 var(--f-body);
+  padding: .5em .8em; border-radius: 999px; cursor: pointer;
+}
+.lang button[aria-pressed="true"] { background: var(--roast-3); color: var(--crema); }
+.top .btn { padding: .65em 1.1em; font-size: .92rem; }
+@media (max-width: 860px) { nav.links { display: none; } .lang { margin-inline-start: auto; } }
+@media (max-width: 420px) { .top .btn-primary span.long { display: none; } .brand span.name { display: none; } }
+
+/* Hero */
+.hero { position: relative; padding-block: clamp(28px, 5vw, 64px) 40px; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: -20% -10% auto auto; width: 70vw; height: 70vw; max-width: 900px; max-height: 900px;
+  background: radial-gradient(closest-side, rgba(217,119,63,.22), transparent 70%); pointer-events: none;
+}
+:root[dir="rtl"] .hero::before { inset: -20% auto auto -10%; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px; align-items: center; position: relative; }
+.hero-copy { display: grid; gap: 22px; min-width: 0; }
+.hero h1 em { font-style: normal; color: var(--copper-hi); }
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: .45em .8em; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--roast-2); font: 500 .82rem/1 var(--f-mono); color: var(--crema-dim);
+}
+.chip svg.i { width: 15px; height: 15px; color: var(--copper-hi); }
+.stage { position: relative; height: clamp(360px, 46vw, 580px); min-width: 0; touch-action: pan-y; }
+.stage canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; }
+.stage-fallback {
+  position: absolute; inset: 10% 6%; display: grid; place-items: center;
+}
+.stage-fallback img { border-radius: 14px; border: 12px solid #0a0a0b; box-shadow: 0 40px 80px -30px #000; transform: perspective(1200px) rotateY(-14deg) rotateX(4deg); }
+.stage-caption {
+  position: absolute; inset-inline: 0; bottom: 4px; display: flex; justify-content: center; align-items: center; gap: 12px;
+  font: 500 .85rem/1 var(--f-body); color: var(--crema-dim); pointer-events: none;
+}
+.dots { display: flex; gap: 6px; pointer-events: auto; }
+.dots button { width: 8px; height: 8px; padding: 0; border-radius: 50%; border: 0; background: var(--line); cursor: pointer; }
+.dots button[aria-current="true"] { background: var(--copper); width: 22px; border-radius: 6px; }
+.hint { position: absolute; top: 8px; inset-inline-end: 8px; font: 500 .75rem/1 var(--f-mono); color: var(--crema-dim); opacity: .7; }
+@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } .stage { order: -1; height: clamp(320px, 80vw, 460px); } }
+
+/* Strip of numbers from a real recipe */
+.strip { border-block: 1px solid var(--line); background: var(--roast-2); }
+.strip .wrap { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-block: 22px; gap: 12px; }
+.strip div { display: grid; gap: 4px; }
+.strip b { font: 600 1.5rem/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.strip span { font-size: var(--s-small); color: var(--crema-dim); }
+@media (max-width: 720px) { .strip .wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip div:last-child { grid-column: 1 / -1; } }
+
+section.band { padding-block: clamp(64px, 9vw, 120px); }
+.section-head { display: grid; gap: 14px; margin-bottom: 44px; max-width: 46em; }
+
+/* Steps */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: step; }
+.step { padding: 26px; border-radius: var(--radius); background: var(--roast-2); border: 1px solid var(--line); display: grid; gap: 12px; align-content: start; }
+.step .n { font: 600 .8rem/1 var(--f-mono); color: var(--copper-hi); }
+.step p { color: var(--crema-dim); }
+@media (max-width: 820px) { .steps { grid-template-columns: 1fr; } }
+
+/* Gallery */
+.gallery { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 36px; align-items: center; }
+.tabs { display: grid; gap: 6px; }
+.tab {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; text-align: start;
+  padding: 14px 16px; border-radius: 14px; border: 1px solid transparent; background: transparent; color: var(--crema-dim);
+  font: inherit; cursor: pointer; transition: background .2s, border-color .2s, color .2s;
+}
+.tab svg.i { grid-row: span 2; color: var(--crema-dim); }
+.tab b { font-weight: 600; color: var(--crema); font-size: 1rem; }
+.tab small { font-size: .84rem; grid-column: 2; line-height: 1.4; }
+.tab small { display: none; }
+.tab[aria-selected="true"] { background: var(--roast-2); border-color: var(--line); }
+.tab[aria-selected="true"] small { display: block; }
+.tab[aria-selected="true"] svg.i { color: var(--copper-hi); }
+.viewer { perspective: 1400px; min-width: 0; }
+.device {
+  position: relative; border-radius: 22px; padding: 3.2% 3.4% 3.2%; background: linear-gradient(160deg, #1e1e21, #08080a 60%);
+  box-shadow: 0 1px 0 #3a3a40 inset, 0 50px 90px -40px #000, 0 0 0 1px #000;
+  transform: rotateX(var(--rx, 6deg)) rotateY(var(--ry, -10deg)); transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.2,.8,.2,1);
+}
+.device::after {
+  content: ""; position: absolute; inset: 0; border-radius: 22px; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.09) 0%, transparent 30%, transparent 70%, rgba(255,255,255,.04) 100%);
+}
+.device img { display: block; width: 100%; aspect-ratio: 5 / 3; border-radius: 4px; background: #000; }
+.viewer figcaption { margin-top: 18px; color: var(--crema-dim); font-size: .95rem; text-align: center; }
+@media (max-width: 860px) {
+  .gallery { grid-template-columns: 1fr; }
+  .tabs { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; padding-bottom: 6px; order: 2; }
+  .tab small { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { .device { transition: none; } }
+
+/* Features */
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.feature { background: var(--roast); padding: 28px; display: grid; gap: 10px; align-content: start; }
+.feature .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--roast-3); color: var(--copper-hi); }
+.feature p { color: var(--crema-dim); font-size: .97rem; }
+@media (max-width: 900px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+
+/* Benefits: split with big screenshot */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+.benefits { display: grid; gap: 26px; }
+.benefit { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; }
+.benefit svg.i { grid-row: span 2; color: var(--copper-hi); margin-top: 3px; }
+.benefit p { color: var(--crema-dim); }
+.float-shot { position: relative; perspective: 1200px; min-width: 0; }
+.float-shot img { width: 100%; border-radius: 16px; border: 10px solid #0b0b0d; box-shadow: 0 40px 80px -36px #000; display: block; }
+.float-shot img:first-child { transform: rotateY(12deg) rotateX(3deg); }
+.float-shot img.back {
+  position: absolute; width: 58%; inset-inline-end: -4%; bottom: -14%; transform: rotateY(12deg) translateZ(60px);
+  animation: bob 6s ease-in-out infinite;
+}
+@keyframes bob { 50% { transform: rotateY(12deg) translateZ(60px) translateY(-12px); } }
+@media (prefers-reduced-motion: reduce) { .float-shot img.back { animation: none; } }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; } .float-shot { margin-bottom: 40px; } }
+
+/* Safety callout */
+.safety { display: grid; grid-template-columns: auto 1fr; gap: 20px; padding: 28px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--water) 40%, var(--line)); background: color-mix(in srgb, var(--water) 7%, var(--roast)); margin-top: 56px; }
+.safety svg.i { width: 34px; height: 34px; color: var(--water); }
+.safety p { color: var(--crema-dim); margin-top: 6px; }
+@media (max-width: 560px) { .safety { grid-template-columns: 1fr; } }
+
+/* Specs */
+.specs-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+table.specs { width: 100%; border-collapse: collapse; min-width: 480px; }
+.specs th, .specs td { padding: 16px 22px; text-align: start; border-bottom: 1px solid var(--line); vertical-align: top; }
+.specs tr:last-child th, .specs tr:last-child td { border-bottom: 0; }
+.specs th { width: 34%; color: var(--crema-dim); font-weight: 400; }
+.specs td { font-family: var(--f-mono); font-size: .95rem; }
+:root[lang="ar"] .specs td { font-family: var(--f-body); }
+.specs td .mono { font-family: var(--f-mono); }
+
+/* Pre-order */
+.order { background: radial-gradient(120% 80% at 80% 0%, rgba(217,119,63,.16), transparent 60%), var(--roast-2); border-block: 1px solid var(--line); }
+.order-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
+.perks { display: grid; gap: 14px; margin-top: 28px; padding: 0; list-style: none; }
+.perks li { display: flex; gap: 12px; align-items: start; color: var(--crema-dim); }
+.perks svg.i { color: var(--ok); width: 20px; height: 20px; margin-top: 3px; }
+form.card { background: var(--roast); border: 1px solid var(--line); border-radius: 22px; padding: clamp(20px, 3.4vw, 34px); display: grid; gap: 18px; box-shadow: 0 30px 80px -50px #000; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+.field { display: grid; gap: 7px; min-width: 0; }
+.field label { font-size: .9rem; font-weight: 500; }
+.field label .opt { color: var(--crema-dim); font-weight: 400; }
+input, select, textarea {
+  width: 100%; font: 400 1rem/1.4 var(--f-body); color: var(--crema); background: var(--roast-3);
+  border: 1px solid var(--line); border-radius: 12px; padding: .8em .95em;
+}
+input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--crema-dim) 70%, transparent); }
+input[type="tel"], input[type="email"] { direction: ltr; text-align: start; }
+:root[dir="rtl"] input[type="tel"], :root[dir="rtl"] input[type="email"] { text-align: right; }
+textarea { resize: vertical; min-height: 84px; }
+.field.invalid input, .field.invalid select { border-color: var(--bad); }
+.err { color: var(--bad); font-size: .82rem; min-height: 0; }
+.err:empty { display: none; }
+.phone { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 8px; direction: ltr; }
+.qty { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; background: var(--roast-3); width: max-content; direction: ltr; }
+.qty button { width: 44px; height: 46px; border: 0; background: transparent; color: var(--crema); font-size: 1.3rem; cursor: pointer; }
+.qty output { min-width: 36px; text-align: center; font: 600 1.05rem/1 var(--f-mono); }
+.consent { display: flex; gap: 10px; align-items: start; font-size: .88rem; color: var(--crema-dim); }
+.consent input { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--copper); flex: none; }
+form .btn-primary { width: 100%; padding: 1.05em; font-size: 1.05rem; }
+form .btn-primary[disabled] { opacity: .6; cursor: wait; transform: none; }
+.status { border-radius: 12px; padding: 14px 16px; font-size: .95rem; display: grid; gap: 10px; }
+.status.ok { background: color-mix(in srgb, var(--ok) 14%, var(--roast)); border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); }
+.status.fail { background: color-mix(in srgb, var(--bad) 12%, var(--roast)); border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); }
+.status pre { margin: 0; white-space: pre-wrap; font: .85rem/1.5 var(--f-mono); color: var(--crema-dim); user-select: all; }
+.status .btn { justify-self: start; padding: .55em 1em; font-size: .88rem; }
+@media (max-width: 900px) { .order-grid { grid-template-columns: 1fr; } }
+
+/* Owner-only list */
+.admin { margin-top: 40px; border: 1px dashed var(--line); border-radius: var(--radius); padding: 22px; display: grid; gap: 14px; }
+.admin-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.admin .tbl { overflow-x: auto; }
+.admin table { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 640px; }
+.admin th, .admin td { text-align: start; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+.admin th { color: var(--crema-dim); font-weight: 500; }
+.admin td.ltr { direction: ltr; text-align: start; font-family: var(--f-mono); }
+
+/* FAQ */
+.faq { display: grid; gap: 10px; max-width: 820px; }
+details { border: 1px solid var(--line); border-radius: 14px; background: var(--roast-2); }
+summary { cursor: pointer; padding: 18px 22px; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; font: 400 1.4rem/1 var(--f-mono); color: var(--copper-hi); }
+details[open] summary::after { content: "–"; }
+details p { padding: 0 22px 20px; color: var(--crema-dim); }
+
+footer { border-top: 1px solid var(--line); padding-block: 36px; color: var(--crema-dim); font-size: .86rem; }
+footer .wrap { display: grid; gap: 10px; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="xBloom Screen">
+      <span class="brand-mark"><svg class="i" data-icon="coffee" viewBox="0 0 24 24"></svg></span>
+      <span class="name">xBloom Screen</span>
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#how" data-i18n="nav.how">How it works</a>
+      <a href="#app" data-i18n="nav.app">The app</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#specs" data-i18n="nav.specs">Specs</a>
+    </nav>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" id="lang-en" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" id="lang-ar" data-lang="ar" aria-pressed="false">عربي</button>
+    </div>
+    <a class="btn btn-primary" href="#preorder"><span data-i18n="nav.cta">Pre-order</span></a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow" data-i18n="hero.eyebrow">For the xBloom Studio · 7" touchscreen</span>
+        <h1 data-i18n-html="hero.title">Your recipes, <em>one tap</em> from the cup.</h1>
+        <p class="lede" data-i18n="hero.lede">xBloom Screen is a 7-inch touch display that sits next to your xBloom Studio. Pick a recipe, load it over Bluetooth, watch every pour live. No phone needed.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#preorder"><span data-i18n="hero.cta">Reserve yours</span> <svg class="i" data-icon="arrow" viewBox="0 0 24 24"></svg></a>
+          <a class="btn btn-ghost" href="#app" data-i18n="hero.cta2">See the app</a>
+        </div>
+        <div class="chips">
+          <span class="chip"><svg class="i" data-icon="monitor" viewBox="0 0 24 24"></svg><span>7" · 800×480</span></span>
+          <span class="chip"><svg class="i" data-icon="hand" viewBox="0 0 24 24"></svg><span data-i18n="chip.touch">Capacitive touch</span></span>
+          <span class="chip"><svg class="i" data-icon="bluetooth" viewBox="0 0 24 24"></svg><span>Bluetooth LE</span></span>
+          <span class="chip"><svg class="i" data-icon="wifi" viewBox="0 0 24 24"></svg><span>Wi-Fi</span></span>
+          <span class="chip"><svg class="i" data-icon="power" viewBox="0 0 24 24"></svg><span>USB-C 5V</span></span>
+        </div>
+      </div>
+      <div class="stage" id="stage" aria-label="3D model of the xBloom Screen display showing the app">
+        <span class="hint" data-i18n="hero.hint">drag to rotate</span>
+        <div class="stage-fallback" id="stage-fallback"><img src="img/home-dark.png" alt="The recipe library on the xBloom Screen" width="800" height="480"></div>
+        <div class="stage-caption"><span id="stage-label">Recipe library</span><div class="dots" id="stage-dots"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip" aria-label="An example recipe, as the screen shows it">
+    <div class="wrap">
+      <div><b>16 g</b><span data-i18n="strip.dose">coffee dose</span></div>
+      <div><b>1:15</b><span data-i18n="strip.ratio">brew ratio</span></div>
+      <div><b>93°C</b><span data-i18n="strip.temp">water temperature</span></div>
+      <div><b>240 ml</b><span data-i18n="strip.water">across 3 pours</span></div>
+      <div><b>~2:30</b><span data-i18n="strip.time">from load to cup</span></div>
+    </div>
+  </div>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow" data-i18n="how.eyebrow">How it works</span>
+        <h2 data-i18n="how.title">Plug it in, pair once, brew forever.</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <span class="n">01</span>
+          <h3 data-i18n="how.s1t">Pair with your machine</h3>
+          <p data-i18n="how.s1p">Power it from any USB-C charger. A short setup wizard sets your PIN and finds the xBloom Studio over Bluetooth.</p>
+        </div>
+        <div class="step">
+          <span class="n">02</span>
+          <h3 data-i18n="how.s2t">Pick a recipe</h3>
+          <p data-i18n="how.s2p">Swipe through your library. Each card shows dose, ratio, grind, temperature and every pour.</p>
+        </div>
+        <div class="step">
+          <span class="n">03</span>
+          <h3 data-i18n="how.s3t">Load, then brew</h3>
+          <p data-i18n="how.s3p">Tap Load to send the recipe to the machine, then press start on the xBloom, or press and hold Brew on the screen.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="app" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow" data-i18n="app.eyebrow">The software</span>
+        <h2 data-i18n="app.title">See every screen before it's on your counter.</h2>
+        <p class="lede" data-i18n="app.lede">These are real screens from the app, running against its built-in demo machine.</p>
+      </div>
+      <div class="gallery">
+        <div class="tabs" role="tablist" id="tabs" aria-label="App screens"></div>
+        <figure class="viewer" id="viewer" style="margin:0">
+          <div class="device" id="device"><img id="viewer-img" src="img/home-dark.png" alt="" width="800" height="480"></div>
+          <figcaption id="viewer-cap"></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="features" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow" data-i18n="feat.eyebrow">What you can do</span>
+        <h2 data-i18n="feat.title">Everything the machine can do, on a screen built for it.</h2>
+      </div>
+      <div class="features" id="feature-grid"></div>
+    </div>
+  </section>
+
+  <section class="band" style="padding-top:0">
+    <div class="wrap split">
+      <div class="float-shot" aria-hidden="true">
+        <img src="img/brewing-dark.png" alt="" width="800" height="480">
+        <img class="back" src="img/screensaver-clock-dark.png" alt="" width="800" height="480">
+      </div>
+      <div class="benefits">
+        <div class="section-head" style="margin:0">
+          <span class="eyebrow" data-i18n="ben.eyebrow">Why you'll love it</span>
+          <h2 data-i18n="ben.title">Better coffee, less fiddling.</h2>
+        </div>
+        <div id="benefit-list" class="benefits"></div>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="safety">
+        <svg class="i" data-icon="shield" viewBox="0 0 24 24"></svg>
+        <div>
+          <h3 data-i18n="safe.t">Loading never starts a brew.</h3>
+          <p data-i18n="safe.p">Load only arms the machine. Water flows only when you press start on the xBloom or deliberately hold Brew on the screen, and a PIN can guard that. The phone panel can stop a brew but can never start one.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="specs" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow" data-i18n="spec.eyebrow">Specifications</span>
+        <h2 data-i18n="spec.title">What's in the box.</h2>
+      </div>
+      <div class="specs-wrap">
+        <table class="specs">
+          <tbody id="spec-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band order" id="preorder">
+    <div class="wrap order-grid">
+      <div>
+        <span class="eyebrow" data-i18n="po.eyebrow">Pre-order</span>
+        <h2 style="margin-top:14px" data-i18n="po.title">Be first in line for the first batch.</h2>
+        <p class="lede" style="margin-top:16px" data-i18n="po.lede">Leave your details and we'll contact you to confirm price, colour and delivery. No payment today.</p>
+        <ul class="perks">
+          <li><svg class="i" data-icon="check" viewBox="0 0 24 24"></svg><span data-i18n="po.p1">Priority from the first production batch</span></li>
+          <li><svg class="i" data-icon="check" viewBox="0 0 24 24"></svg><span data-i18n="po.p2">Arrives flashed and ready: plug in, pair, brew</span></li>
+          <li><svg class="i" data-icon="check" viewBox="0 0 24 24"></svg><span data-i18n="po.p3">Free software updates</span></li>
+          <li><svg class="i" data-icon="check" viewBox="0 0 24 24"></svg><span data-i18n="po.p4">Cancel any time before you pay</span></li>
+        </ul>
+      </div>
+
+      <form class="card" id="po-form" novalidate>
+        <div class="field" id="f-name">
+          <label for="po-name" data-i18n="f.name">Full name</label>
+          <input id="po-name" name="name" autocomplete="name" required maxlength="120" data-i18n-ph="f.name.ph" placeholder="Your full name">
+          <span class="err" id="e-name"></span>
+        </div>
+        <div class="field" id="f-email">
+          <label for="po-email" data-i18n="f.email">Email</label>
+          <input id="po-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="name@example.com">
+          <span class="err" id="e-email"></span>
+        </div>
+        <div class="field" id="f-phone">
+          <label for="po-phone" data-i18n="f.phone">Phone number</label>
+          <div class="phone">
+            <select id="po-cc" name="cc" aria-label="Country code">
+              <option value="+971">🇦🇪 +971</option>
+              <option value="+966">🇸🇦 +966</option>
+              <option value="+974">🇶🇦 +974</option>
+              <option value="+965">🇰🇼 +965</option>
+              <option value="+973">🇧🇭 +973</option>
+              <option value="+968">🇴🇲 +968</option>
+              <option value="+20">🇪🇬 +20</option>
+              <option value="+962">🇯🇴 +962</option>
+              <option value="+44">🇬🇧 +44</option>
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+49">🇩🇪 +49</option>
+            </select>
+            <input id="po-phone" name="phone" type="tel" autocomplete="tel-national" inputmode="tel" required maxlength="20" placeholder="50 123 4567">
+          </div>
+          <span class="err" id="e-phone"></span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="po-city" data-i18n="f.city">City <span class="opt">(optional)</span></label>
+            <input id="po-city" name="city" autocomplete="address-level2" maxlength="80" data-i18n-ph="f.city.ph" placeholder="Dubai">
+          </div>
+          <div class="field">
+            <label id="qty-label" data-i18n="f.qty">Quantity</label>
+            <div class="qty" role="group" aria-labelledby="qty-label">
+              <button type="button" id="qty-minus" aria-label="−">−</button>
+              <output id="po-qty" aria-live="polite">1</output>
+              <button type="button" id="qty-plus" aria-label="+">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="po-note" data-i18n="f.note">Anything we should know? <span class="opt">(optional)</span></label>
+          <textarea id="po-note" name="note" maxlength="600" data-i18n-ph="f.note.ph" placeholder="Gift wrapping, preferred colour, delivery questions…"></textarea>
+        </div>
+        <label class="consent"><input type="checkbox" id="po-consent" required><span data-i18n="f.consent">I agree to be contacted about my pre-order by email or phone.</span></label>
+        <span class="err" id="e-consent"></span>
+        <button class="btn btn-primary" type="submit" id="po-submit"><span data-i18n="f.submit">Reserve my xBloom Screen</span></button>
+        <div id="po-status" aria-live="polite"></div>
+      </form>
+    </div>
+
+    <div class="wrap">
+      <div class="admin" id="admin" hidden>
+        <div class="admin-head">
+          <div><span class="eyebrow" data-i18n="ad.eyebrow">Only you can see this</span><h3 style="margin-top:8px"><span data-i18n="ad.title">Pre-orders</span> · <span id="ad-count" class="mono">0</span></h3></div>
+          <button class="btn btn-ghost" type="button" id="ad-copy" data-i18n="ad.copy">Copy as CSV</button>
+        </div>
+        <div class="tbl"><table><thead><tr>
+          <th data-i18n="ad.date">Date</th><th data-i18n="f.name">Full name</th><th data-i18n="f.email">Email</th><th data-i18n="f.phone">Phone number</th><th data-i18n="ad.city">City</th><th data-i18n="f.qty">Quantity</th><th data-i18n="ad.note">Note</th>
+        </tr></thead><tbody id="ad-rows"></tbody></table></div>
+        <p id="ad-empty" style="color:var(--crema-dim)" data-i18n="ad.empty">No pre-orders yet. They appear here as soon as someone submits the form.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="section-head"><span class="eyebrow" data-i18n="faq.eyebrow">Questions</span><h2 data-i18n="faq.title">Good to know.</h2></div>
+      <div class="faq" id="faq"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 xBloom Screen</span>
+    <span data-i18n="foot.disc">Independent product. Not affiliated with or endorsed by xBloom or Waveshare. xBloom Studio is sold separately.</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ---------- Settings for self-hosting ----------
+   Outside claude.ai there is no built-in store. Set PREORDER_ENDPOINT to a URL
+   that accepts a JSON POST (Formspree, a Google Apps Script web app, your own API). */
+const PREORDER_ENDPOINT = "";
+
+/* ---------- Icons (Lucide, as used in the app itself) ---------- */
+const ICONS = {
+  coffee: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  disc: '<circle cx="12" cy="12" r="10"/><path d="M6 12c0-1.7.7-3.2 1.8-4.2"/><circle cx="12" cy="12" r="2"/><path d="M18 12c0 1.7-.7 3.2-1.8 4.2"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  qr: '<rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>',
+  hand: '<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  droplet: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+  bluetooth: '<path d="m7 7 10 10-5 5V2l5 5L7 17"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  timer: '<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+  sunmoon: '<path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/>',
+  sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+};
+function paintIcons(root) {
+  root.querySelectorAll("svg[data-icon]").forEach(s => { if (!s.innerHTML.trim()) s.innerHTML = ICONS[s.dataset.icon] || ""; });
+}
+const icon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+
+/* ---------- Copy, in both languages ---------- */
+const T = {
+  en: {
+    "nav.how": "How it works", "nav.app": "The app", "nav.features": "Features", "nav.specs": "Specs", "nav.cta": "Pre-order",
+    "hero.eyebrow": "For the xBloom Studio · 7\" touchscreen",
+    "hero.title": "Your recipes, <em>one tap</em> from the cup.",
+    "hero.lede": "xBloom Screen is a 7-inch touch display that sits next to your xBloom Studio. Pick a recipe, load it over Bluetooth, watch every pour live. No phone needed.",
+    "hero.cta": "Reserve yours", "hero.cta2": "See the app", "hero.hint": "drag to rotate", "chip.touch": "Capacitive touch",
+    "strip.dose": "coffee dose", "strip.ratio": "brew ratio", "strip.temp": "water temperature", "strip.water": "across 3 pours", "strip.time": "from load to cup",
+    "how.eyebrow": "How it works", "how.title": "Plug it in, pair once, brew forever.",
+    "how.s1t": "Pair with your machine", "how.s1p": "Power it from any USB-C charger. A short setup wizard sets your PIN and finds the xBloom Studio over Bluetooth.",
+    "how.s2t": "Pick a recipe", "how.s2p": "Swipe through your library. Each card shows dose, ratio, grind, temperature and every pour.",
+    "how.s3t": "Load, then brew", "how.s3p": "Tap Load to send the recipe to the machine, then press start on the xBloom, or press and hold Brew on the screen.",
+    "app.eyebrow": "The software", "app.title": "See every screen before it's on your counter.", "app.lede": "These are real screens from the app, running against its built-in demo machine.",
+    "feat.eyebrow": "What you can do", "feat.title": "Everything the machine can do, on a screen built for it.",
+    "ben.eyebrow": "Why you'll love it", "ben.title": "Better coffee, less fiddling.",
+    "safe.t": "Loading never starts a brew.",
+    "safe.p": "Load only arms the machine. Water flows only when you press start on the xBloom or deliberately hold Brew on the screen, and a PIN can guard that. The phone panel can stop a brew but can never start one.",
+    "spec.eyebrow": "Specifications", "spec.title": "What's in the box.",
+    "po.eyebrow": "Pre-order", "po.title": "Be first in line for the first batch.",
+    "po.lede": "Leave your details and we'll contact you to confirm price, colour and delivery. No payment today.",
+    "po.p1": "Priority from the first production batch", "po.p2": "Arrives flashed and ready: plug in, pair, brew", "po.p3": "Free software updates", "po.p4": "Cancel any time before you pay",
+    "f.name": "Full name", "f.name.ph": "Your full name", "f.email": "Email", "f.phone": "Phone number",
+    "f.city": "City <span class=\"opt\">(optional)</span>", "f.city.ph": "Dubai", "f.qty": "Quantity",
+    "f.note": "Anything we should know? <span class=\"opt\">(optional)</span>", "f.note.ph": "Gift wrapping, preferred colour, delivery questions…",
+    "f.consent": "I agree to be contacted about my pre-order by email or phone.",
+    "f.submit": "Reserve my xBloom Screen", "f.sending": "Saving…",
+    "e.name": "Please enter your name.", "e.email": "Please enter a valid email, like name@example.com.", "e.phone": "Please enter a phone number with at least 7 digits.", "e.consent": "Please tick the box so we can contact you.",
+    "s.ok": "You're on the list, {name}. We'll contact you at {email} to confirm your pre-order.",
+    "s.again": "Want to change something? Edit the form and submit again; it updates your pre-order.",
+    "s.fail": "We couldn't save your pre-order on this page. Copy your details below and send them to the seller.",
+    "s.copy": "Copy my details", "s.copied": "Copied",
+    "ad.eyebrow": "Only you can see this", "ad.title": "Pre-orders", "ad.copy": "Copy as CSV", "ad.copied": "Copied", "ad.date": "Date", "ad.city": "City", "ad.note": "Note",
+    "ad.empty": "No pre-orders yet. They appear here as soon as someone submits the form.",
+    "faq.eyebrow": "Questions", "faq.title": "Good to know.",
+    "foot.disc": "Independent product. Not affiliated with or endorsed by xBloom or Waveshare. xBloom Studio is sold separately."
+  },
+  ar: {
+    "nav.how": "كيف يعمل", "nav.app": "التطبيق", "nav.features": "المزايا", "nav.specs": "المواصفات", "nav.cta": "اطلب مسبقًا",
+    "hero.eyebrow": "لآلة xBloom Studio · شاشة لمس 7 بوصات",
+    "hero.title": "وصفاتك على بُعد <em>لمسة واحدة</em> من فنجانك.",
+    "hero.lede": "xBloom Screen شاشة لمس مقاس 7 بوصات توضع بجانب آلة xBloom Studio. اختر وصفتك، أرسلها عبر البلوتوث، وتابع كل صبّة لحظة بلحظة. دون الحاجة إلى هاتفك.",
+    "hero.cta": "احجز جهازك", "hero.cta2": "شاهد التطبيق", "hero.hint": "اسحب للتدوير", "chip.touch": "لمس سعوي",
+    "strip.dose": "كمية البن", "strip.ratio": "نسبة التحضير", "strip.temp": "حرارة الماء", "strip.water": "على 3 صبّات", "strip.time": "من التحميل حتى الفنجان",
+    "how.eyebrow": "كيف يعمل", "how.title": "وصّله، اقرنه مرة واحدة، واستمتع دائمًا.",
+    "how.s1t": "اقرنه بآلتك", "how.s1p": "شغّله بأي شاحن USB-C. معالج إعداد قصير يضبط رمز PIN ويعثر على آلة xBloom Studio عبر البلوتوث.",
+    "how.s2t": "اختر وصفة", "how.s2p": "تصفّح مكتبتك بالسحب. كل بطاقة تعرض كمية البن والنسبة ودرجة الطحن والحرارة وكل صبّة.",
+    "how.s3t": "حمّل الوصفة ثم حضّر", "how.s3p": "اضغط «تحميل» لإرسال الوصفة إلى الآلة، ثم اضغط زر البدء على xBloom، أو اضغط مطولًا على «تحضير» في الشاشة.",
+    "app.eyebrow": "البرنامج", "app.title": "شاهد كل شاشة قبل أن تصل إلى مطبخك.", "app.lede": "هذه شاشات حقيقية من التطبيق، تعمل مع الآلة التجريبية المدمجة فيه.",
+    "feat.eyebrow": "ماذا يمكنك أن تفعل", "feat.title": "كل ما تستطيعه الآلة، على شاشة صُممت لها.",
+    "ben.eyebrow": "لماذا ستحبه", "ben.title": "قهوة أفضل، وعناء أقل.",
+    "safe.t": "تحميل الوصفة لا يبدأ التحضير أبدًا.",
+    "safe.p": "التحميل يجهّز الآلة فقط. لا يتدفق الماء إلا عندما تضغط زر البدء على xBloom أو تضغط مطولًا وبشكل مقصود على «تحضير» في الشاشة، ويمكن حماية ذلك برمز PIN. لوحة الهاتف تستطيع إيقاف التحضير لكنها لا تستطيع بدءه أبدًا.",
+    "spec.eyebrow": "المواصفات", "spec.title": "ماذا في العلبة.",
+    "po.eyebrow": "الطلب المسبق", "po.title": "كن أول من يحصل عليه من الدفعة الأولى.",
+    "po.lede": "اترك بياناتك وسنتواصل معك لتأكيد السعر واللون وموعد التوصيل. لا دفع اليوم.",
+    "po.p1": "أولوية في الدفعة الأولى من الإنتاج", "po.p2": "يصلك مبرمجًا وجاهزًا: وصّل، اقرن، حضّر", "po.p3": "تحديثات برمجية مجانية", "po.p4": "إلغاء في أي وقت قبل الدفع",
+    "f.name": "الاسم الكامل", "f.name.ph": "اسمك الكامل", "f.email": "البريد الإلكتروني", "f.phone": "رقم الهاتف",
+    "f.city": "المدينة <span class=\"opt\">(اختياري)</span>", "f.city.ph": "دبي", "f.qty": "الكمية",
+    "f.note": "هل هناك ما يجب أن نعرفه؟ <span class=\"opt\">(اختياري)</span>", "f.note.ph": "تغليف هدية، لون مفضل، أسئلة عن التوصيل…",
+    "f.consent": "أوافق على التواصل معي بخصوص طلبي المسبق عبر البريد الإلكتروني أو الهاتف.",
+    "f.submit": "احجز جهاز xBloom Screen", "f.sending": "جارٍ الحفظ…",
+    "e.name": "يرجى إدخال اسمك.", "e.email": "يرجى إدخال بريد إلكتروني صحيح، مثل name@example.com.", "e.phone": "يرجى إدخال رقم هاتف من 7 أرقام على الأقل.", "e.consent": "يرجى تحديد المربع حتى نتمكن من التواصل معك.",
+    "s.ok": "تم تسجيلك يا {name}. سنتواصل معك على {email} لتأكيد طلبك المسبق.",
+    "s.again": "تريد تعديل شيء؟ عدّل النموذج وأرسله مجددًا لتحديث طلبك.",
+    "s.fail": "تعذّر حفظ طلبك من هذه الصفحة. انسخ بياناتك أدناه وأرسلها إلى البائع.",
+    "s.copy": "انسخ بياناتي", "s.copied": "تم النسخ",
+    "ad.eyebrow": "هذا القسم يظهر لك وحدك", "ad.title": "الطلبات المسبقة", "ad.copy": "نسخ بصيغة CSV", "ad.copied": "تم النسخ", "ad.date": "التاريخ", "ad.city": "المدينة", "ad.note": "ملاحظة",
+    "ad.empty": "لا توجد طلبات بعد. ستظهر هنا فور إرسال أي شخص للنموذج.",
+    "faq.eyebrow": "أسئلة", "faq.title": "معلومات مفيدة.",
+    "foot.disc": "منتج مستقل، غير تابع لشركة xBloom أو Waveshare ولا معتمد منهما. آلة xBloom Studio تُباع منفصلة."
+  }
+};
+
+const SCREENS = [
+  { img: "home-dark", icon: "coffee", en: ["Recipe library", "Swipe through your recipes. Dose, ratio, grind and pours at a glance."], ar: ["مكتبة الوصفات", "تصفّح وصفاتك بالسحب: الكمية والنسبة والطحن والصبّات في لمحة."] },
+  { img: "recipe-dark", icon: "droplet", en: ["Recipe detail", "Every pour, temperature and grind setting before you load it."], ar: ["تفاصيل الوصفة", "كل صبّة ودرجة حرارة وطحن قبل أن تحمّلها."] },
+  { img: "brewing-dark", icon: "timer", en: ["Live brew", "A progress ring and a live water and in-cup chart, with Stop always in reach."], ar: ["التحضير المباشر", "حلقة تقدم ورسم بياني مباشر للماء والقهوة في الفنجان، وزر الإيقاف دائمًا في متناولك."] },
+  { img: "brew-done-dark", icon: "check", en: ["Brew complete", "Final weight, ratio and total time for every cup."], ar: ["اكتمل التحضير", "الوزن النهائي والنسبة والوقت الكلي لكل فنجان."] },
+  { img: "presets-dark", icon: "disc", en: ["Dial presets", "Program the machine's three Easy-Mode dial presets from any recipe."], ar: ["إعدادات القرص", "برمج الإعدادات الثلاثة لقرص الوضع السهل في الآلة من أي وصفة."] },
+  { img: "history-dark", icon: "history", en: ["Brew history", "Every brew with its curve, ratio and time."], ar: ["سجل التحضير", "كل تحضير مع منحناه ونسبته ووقته."] },
+  { img: "screensaver-clock-dark", icon: "image", en: ["Screensaver", "A clock, your photos or a video when the screen is idle."], ar: ["شاشة التوقف", "ساعة أو صورك أو فيديو عندما تكون الشاشة في وضع الخمول."] },
+  { img: "settings-admin-dark", icon: "qr", en: ["Phone admin panel", "Scan the QR code to edit recipes and settings from your phone."], ar: ["لوحة التحكم من الهاتف", "امسح رمز QR لتعديل الوصفات والإعدادات من هاتفك."] },
+  { img: "lock-dark", icon: "lock", en: ["PIN lock", "Lock brewing or the whole screen with a PIN."], ar: ["القفل برمز PIN", "اقفل التحضير أو الشاشة كاملة برمز PIN."] }
+];
+
+const FEATURES = [
+  { icon: "coffee", en: ["Recipe library", "Swipe, tap, load. Your favourite brews stay one tap away."], ar: ["مكتبة الوصفات", "اسحب، المس، حمّل. وصفاتك المفضلة دائمًا على بُعد لمسة."] },
+  { icon: "timer", en: ["Live brew view", "Watch water and in-cup weight climb pour by pour, with a big Stop button."], ar: ["عرض التحضير المباشر", "راقب وزن الماء والقهوة يرتفع صبّة بعد صبّة، مع زر إيقاف كبير."] },
+  { icon: "hand", en: ["Hold to brew", "Start from the screen with a deliberate press-and-hold, never by accident."], ar: ["اضغط مطولًا للتحضير", "ابدأ من الشاشة بضغطة مطولة مقصودة، لا بالخطأ أبدًا."] },
+  { icon: "disc", en: ["Dial presets", "Put any three recipes on the machine's own Easy-Mode dial."], ar: ["إعدادات القرص", "ضع أي ثلاث وصفات على قرص الوضع السهل في الآلة نفسها."] },
+  { icon: "qr", en: ["Phone admin panel", "Create and edit recipes on your phone with live checks against the machine's limits."], ar: ["لوحة تحكم من الهاتف", "أنشئ وعدّل الوصفات من هاتفك مع تحقق فوري من حدود الآلة."] },
+  { icon: "history", en: ["Brew history", "Every cup logged with its chart. Export to CSV any time."], ar: ["سجل التحضير", "كل فنجان مسجّل مع رسمه البياني. صدّره بصيغة CSV متى شئت."] },
+  { icon: "lock", en: ["PIN lock", "Lock brewing only, or the whole screen, with an optional second user PIN."], ar: ["القفل برمز PIN", "اقفل التحضير فقط أو الشاشة كاملة، مع رمز PIN اختياري لمستخدم ثانٍ."] },
+  { icon: "image", en: ["Screensaver", "A clock, a photo slideshow or your own video, with automatic sleep."], ar: ["شاشة التوقف", "ساعة أو عرض صور أو الفيديو الخاص بك، مع إطفاء تلقائي."] },
+  { icon: "sunmoon", en: ["Light and dark", "Automatic dark mode at night and six accent colours."], ar: ["فاتح وداكن", "وضع داكن تلقائي ليلًا وستة ألوان مميزة للاختيار."] }
+];
+
+const BENEFITS = [
+  { icon: "sparkles", en: ["The same great cup, every time", "Your exact grind, ratio and temperature are saved on the screen. No re-typing, no guesswork."], ar: ["نفس الفنجان الرائع في كل مرة", "درجة الطحن والنسبة والحرارة محفوظة على الشاشة. لا إعادة إدخال ولا تخمين."] },
+  { icon: "monitor", en: ["Your phone stays in your pocket", "A dedicated screen on the counter means no unlocking, no app hunting, no notifications in the way."], ar: ["هاتفك يبقى في جيبك", "شاشة مخصصة على الطاولة تعني لا فتح للهاتف ولا بحث عن التطبيق ولا إشعارات تقاطعك."] },
+  { icon: "timer", en: ["See what's happening", "The live chart shows how each pour is going, so you learn what makes a cup taste better."], ar: ["شاهد ما يحدث", "الرسم البياني المباشر يُظهر سير كل صبّة، فتتعلم ما يجعل قهوتك ألذ."] },
+  { icon: "shield", en: ["Safe for the whole family", "PIN locks and a hold-to-brew gesture keep curious hands from starting hot water."], ar: ["آمن لكل العائلة", "أقفال PIN وإيماءة الضغط المطوّل تمنع الأيدي الفضولية من تشغيل الماء الساخن."] }
+];
+
+const SPECS = [
+  { en: ["Display", "7\" IPS, 800 × 480"], ar: ["الشاشة", "7 بوصات IPS بدقة <span class=\"mono\">800 × 480</span>"] },
+  { en: ["Touch", "Capacitive, GT911"], ar: ["اللمس", "سعوي، GT911"] },
+  { en: ["Board", "Waveshare ESP32-S3-Touch-LCD-7"], ar: ["اللوحة", "<span class=\"mono\">Waveshare ESP32-S3-Touch-LCD-7</span>"] },
+  { en: ["Processor & memory", "ESP32-S3, 8 MB PSRAM, 8–16 MB flash"], ar: ["المعالج والذاكرة", "ESP32-S3، ذاكرة PSRAM ‏8 ميغابايت، تخزين فلاش 8–16 ميغابايت"] },
+  { en: ["Wireless", "Bluetooth LE to the machine, Wi-Fi for the admin panel"], ar: ["الاتصال اللاسلكي", "بلوتوث منخفض الطاقة للآلة، وواي فاي للوحة التحكم"] },
+  { en: ["Power", "USB-C, 5 V"], ar: ["الطاقة", "USB-C بجهد 5 فولت"] },
+  { en: ["Works with", "xBloom Studio (sold separately)"], ar: ["متوافق مع", "xBloom Studio (تُباع منفصلة)"] },
+  { en: ["Languages", "Arabic and English website; app in English"], ar: ["اللغات", "الموقع بالعربية والإنجليزية؛ التطبيق بالإنجليزية"] }
+];
+
+const FAQ = [
+  { en: ["Does it replace the xBloom app?", "For daily brewing, yes. You choose and load recipes on the screen and manage them from any phone's browser through the built-in admin panel."], ar: ["هل يغني عن تطبيق xBloom؟", "للاستخدام اليومي، نعم. تختار الوصفات وتحمّلها من الشاشة، وتديرها من متصفح أي هاتف عبر لوحة التحكم المدمجة."] },
+  { en: ["Do I need the internet?", "No. The screen talks to the machine over Bluetooth. Wi-Fi is only used to open the admin panel from your phone."], ar: ["هل أحتاج إلى الإنترنت؟", "لا. تتصل الشاشة بالآلة عبر البلوتوث. يُستخدم الواي فاي فقط لفتح لوحة التحكم من هاتفك."] },
+  { en: ["Can it start brewing by itself?", "No. Loading a recipe only prepares the machine. A brew starts only when you press start on the machine or hold Brew on the screen."], ar: ["هل يمكن أن يبدأ التحضير من تلقاء نفسه؟", "لا. تحميل الوصفة يجهّز الآلة فقط. لا يبدأ التحضير إلا عندما تضغط زر البدء على الآلة أو تضغط مطولًا على «تحضير» في الشاشة."] },
+  { en: ["When do I pay?", "Not now. We'll contact you to confirm the price and delivery date before any payment."], ar: ["متى أدفع؟", "ليس الآن. سنتواصل معك لتأكيد السعر وموعد التوصيل قبل أي دفع."] }
+];
+
+/* ---------- Language ---------- */
+let lang = "en";
+try { lang = localStorage.getItem("xs-lang") || ((navigator.language || "").startsWith("ar") ? "ar" : "en"); } catch (e) {}
+let currentScreen = 0;
+
+function t(k) { return (T[lang] && T[lang][k]) || T.en[k] || k; }
+
+function renderLists() {
+  document.getElementById("feature-grid").innerHTML = FEATURES.map(f =>
+    `<div class="feature"><span class="ic">${icon(f.icon)}</span><h3>${f[lang][0]}</h3><p>${f[lang][1]}</p></div>`).join("");
+  document.getElementById("benefit-list").innerHTML = BENEFITS.map(b =>
+    `<div class="benefit">${icon(b.icon)}<h3>${b[lang][0]}</h3><p>${b[lang][1]}</p></div>`).join("");
+  document.getElementById("spec-rows").innerHTML = SPECS.map(s =>
+    `<tr><th scope="row">${s[lang][0]}</th><td>${s[lang][1]}</td></tr>`).join("");
+  document.getElementById("faq").innerHTML = FAQ.map((q, i) =>
+    `<details id="faq-${i}"><summary>${q[lang][0]}</summary><p>${q[lang][1]}</p></details>`).join("");
+  document.getElementById("tabs").innerHTML = SCREENS.map((s, i) =>
+    `<button class="tab" role="tab" id="tab-${i}" data-i="${i}" aria-selected="${i === currentScreen}">${icon(s.icon)}<b>${s[lang][0]}</b><small>${s[lang][1]}</small></button>`).join("");
+  document.getElementById("stage-dots").innerHTML = SCREENS.map((s, i) =>
+    `<button type="button" data-i="${i}" aria-label="${s[lang][0]}"${i === stageIndex ? ' aria-current="true"' : ""}></button>`).join("");
+  showScreen(currentScreen, false);
+  setStageLabel(stageIndex);
+}
+
+function applyLang(l) {
+  lang = l;
+  try { localStorage.setItem("xs-lang", l); } catch (e) {}
+  const html = document.documentElement;
+  html.lang = l; html.dir = l === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-html]").forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === l)));
+  renderLists();
+  if (lastOk) showOk(lastOk);
+  renderAdmin();
+}
+document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => applyLang(b.dataset.lang)));
+
+/* ---------- Gallery ---------- */
+const vImg = document.getElementById("viewer-img");
+const vCap = document.getElementById("viewer-cap");
+function showScreen(i, fade = true) {
+  currentScreen = i;
+  const s = SCREENS[i];
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(+b.dataset.i === i)));
+  const swap = () => { vImg.src = `img/${s.img}.png`; vImg.alt = s[lang][0]; vCap.textContent = s[lang][1]; vImg.style.opacity = 1; };
+  if (fade && !reduced) { vImg.style.transition = "opacity .18s"; vImg.style.opacity = 0; setTimeout(swap, 180); } else swap();
+}
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab"); if (b) showScreen(+b.dataset.i);
+});
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const device = document.getElementById("device");
+const viewer = document.getElementById("viewer");
+if (!reduced) {
+  viewer.addEventListener("pointermove", e => {
+    const r = viewer.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    device.style.setProperty("--ry", `${x * 16}deg`); device.style.setProperty("--rx", `${-y * 12}deg`);
+  });
+  viewer.addEventListener("pointerleave", () => { device.style.removeProperty("--ry"); device.style.removeProperty("--rx"); });
+}
+
+/* ---------- 3D hero ---------- */
+let stageIndex = 0;
+let goToStage = () => {};
+function setStageLabel(i) {
+  document.getElementById("stage-label").textContent = SCREENS[i][lang][0];
+  document.querySelectorAll("#stage-dots button").forEach(b => {
+    if (+b.dataset.i === i) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+  });
+}
+document.getElementById("stage-dots").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (b) goToStage(+b.dataset.i);
+});
+
+function initThree() {
+  if (!window.THREE) return;
+  const stage = document.getElementById("stage");
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); } catch (e) { return; }
+  document.getElementById("stage-fallback").hidden = true;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  stage.prepend(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1, .1, 100);
+  camera.position.set(0, 0, 8.4);
+
+  scene.add(new THREE.AmbientLight(0xffe8d6, .35));
+  const key = new THREE.DirectionalLight(0xffd9b8, 1.3); key.position.set(-3, 4, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x5aaee8, 1.1); rim.position.set(4, -1, -4); scene.add(rim);
+  const warm = new THREE.PointLight(0xd9773f, 2.2, 12); warm.position.set(2.5, 2, 2.5); scene.add(warm);
+
+  const device3d = new THREE.Group(); scene.add(device3d);
+
+  // Bezel: rounded slab sized like the 7" board (approx. 192 × 110 mm)
+  const W = 3.6, H = 2.16, R = .16, D = .14;
+  const shape = new THREE.Shape();
+  shape.moveTo(-W/2 + R, -H/2); shape.lineTo(W/2 - R, -H/2); shape.quadraticCurveTo(W/2, -H/2, W/2, -H/2 + R);
+  shape.lineTo(W/2, H/2 - R); shape.quadraticCurveTo(W/2, H/2, W/2 - R, H/2); shape.lineTo(-W/2 + R, H/2);
+  shape.quadraticCurveTo(-W/2, H/2, -W/2, H/2 - R); shape.lineTo(-W/2, -H/2 + R); shape.quadraticCurveTo(-W/2, -H/2, -W/2 + R, -H/2);
+  const bezelGeo = new THREE.ExtrudeGeometry(shape, { depth: D, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 4, curveSegments: 10 });
+  bezelGeo.translate(0, 0, -D / 2);
+  const bezel = new THREE.Mesh(bezelGeo, new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: .28, metalness: .55 }));
+  device3d.add(bezel);
+  const front = D / 2 + .03;
+
+  // Screen: canvas texture so screens can cross-fade
+  const SW = 3.2, SH = SW * 480 / 800;
+  const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 614;
+  const ctx = cv.getContext("2d");
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  screen.position.set(0, 0, front + .002); device3d.add(screen);
+  // Glass sheen
+  const sheenCv = document.createElement("canvas"); sheenCv.width = 256; sheenCv.height = 256;
+  const sg = sheenCv.getContext("2d"); const gr = sg.createLinearGradient(0, 0, 256, 256);
+  gr.addColorStop(0, "rgba(255,255,255,.16)"); gr.addColorStop(.35, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(255,255,255,.04)");
+  sg.fillStyle = gr; sg.fillRect(0, 0, 256, 256);
+  const sheen = new THREE.Mesh(new THREE.PlaneGeometry(W - .1, H - .1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sheenCv), transparent: true, depthWrite: false }));
+  sheen.position.z = front + .006; device3d.add(sheen);
+
+  // Back: ESP32-S3 module shield, USB-C port and connectors
+  const metal = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: .3, metalness: 1 });
+  const module = new THREE.Mesh(new THREE.BoxGeometry(.62, .9, .06), metal); module.position.set(-.9, .2, -D/2 - .06); device3d.add(module);
+  const pcbMat = new THREE.MeshStandardMaterial({ color: 0x16161a, roughness: .6, metalness: .2 });
+  const ant = new THREE.Mesh(new THREE.BoxGeometry(.62, .22, .03), pcbMat); ant.position.set(-.9, .76, -D/2 - .05); device3d.add(ant);
+  const usb = new THREE.Mesh(new THREE.BoxGeometry(.32, .1, .12), metal); usb.position.set(.3, -H/2 - .01, -D/2 - .02); device3d.add(usb);
+  for (let i = 0; i < 3; i++) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(.34, .2, .1), new THREE.MeshStandardMaterial({ color: 0xe9e4d6, roughness: .7 }));
+    c.position.set(.55 + i * .42, .6, -D/2 - .06); device3d.add(c);
+  }
+  // Copper status LED on the bezel
+  const led = new THREE.Mesh(new THREE.CircleGeometry(.025, 16), new THREE.MeshBasicMaterial({ color: 0xf09358 }));
+  led.position.set(W/2 - .14, -H/2 + .1, front + .003); device3d.add(led);
+
+  // Glow behind the device
+  const glowCv = document.createElement("canvas"); glowCv.width = glowCv.height = 256;
+  const gg = glowCv.getContext("2d"); const rg = gg.createRadialGradient(128, 128, 0, 128, 128, 128);
+  rg.addColorStop(0, "rgba(217,119,63,.55)"); rg.addColorStop(.5, "rgba(217,119,63,.12)"); rg.addColorStop(1, "rgba(217,119,63,0)");
+  gg.fillStyle = rg; gg.fillRect(0, 0, 256, 256);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(glowCv), depthWrite: false, transparent: true }));
+  glow.scale.set(9, 7, 1); glow.position.z = -2.4; scene.add(glow);
+
+  // Coffee beans orbiting the screen
+  const beanGeo = new THREE.SphereGeometry(.13, 20, 14); beanGeo.scale(1, .72, .5);
+  const beanMat = new THREE.MeshStandardMaterial({ color: 0x4a2a17, roughness: .42, metalness: .1 });
+  const creaseMat = new THREE.MeshStandardMaterial({ color: 0x1e0f07, roughness: .8 });
+  const beans = [];
+  for (let i = 0; i < 16; i++) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(beanGeo, beanMat));
+    const crease = new THREE.Mesh(new THREE.TorusGeometry(.075, .012, 6, 20, Math.PI), creaseMat);
+    crease.rotation.z = Math.PI / 2; crease.scale.set(1, 1.2, .6); crease.position.z = .062; g.add(crease);
+    const s = .7 + Math.random() * .7; g.scale.setScalar(s);
+    g.userData = { a: Math.random() * Math.PI * 2, r: 2.4 + Math.random() * 1.4, y: (Math.random() - .5) * 2.6, sp: .08 + Math.random() * .12, spin: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(.02) };
+    scene.add(g); beans.push(g);
+  }
+
+  // Images for the screen
+  const imgs = SCREENS.map(s => { const im = new Image(); im.src = `img/${s.img}.png`; return im; });
+  let from = 0, to = 0, mix = 1, lastSwitch = performance.now();
+  function drawScreen() {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+    const a = imgs[from], b = imgs[to];
+    if (a.complete && a.naturalWidth) { ctx.globalAlpha = 1; ctx.drawImage(a, 0, 0, cv.width, cv.height); }
+    if (b.complete && b.naturalWidth && mix > 0) { ctx.globalAlpha = mix; ctx.drawImage(b, 0, 0, cv.width, cv.height); }
+    ctx.globalAlpha = 1; tex.needsUpdate = true;
+  }
+  imgs[0].onload = drawScreen;
+  goToStage = i => { if (i === to) return; from = to; to = i; mix = 0; stageIndex = i; lastSwitch = performance.now(); setStageLabel(i); };
+
+  // Interaction: drag to rotate, pointer parallax, scroll turn
+  let dragX = 0, dragY = 0, dragging = false, px = 0, py = 0, pointerX = 0, pointerY = 0, moved = 0;
+  const el = renderer.domElement;
+  el.addEventListener("pointerdown", e => { dragging = true; moved = 0; px = e.clientX; py = e.clientY; el.setPointerCapture(e.pointerId); el.style.cursor = "grabbing"; });
+  el.addEventListener("pointermove", e => {
+    const r = el.getBoundingClientRect();
+    pointerX = (e.clientX - r.left) / r.width - .5; pointerY = (e.clientY - r.top) / r.height - .5;
+    if (!dragging) return;
+    const dx = e.clientX - px, dy = e.clientY - py; moved += Math.abs(dx) + Math.abs(dy);
+    dragX += dx * .008; dragY = Math.max(-.6, Math.min(.6, dragY + dy * .005)); px = e.clientX; py = e.clientY;
+  });
+  const end = () => { if (dragging && moved < 6) goToStage((to + 1) % SCREENS.length); dragging = false; el.style.cursor = "grab"; };
+  el.addEventListener("pointerup", end); el.addEventListener("pointercancel", () => { dragging = false; });
+  el.addEventListener("pointerleave", () => { pointerX = pointerY = 0; });
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.position.z = w < 520 ? 7.6 : (w / h < 1.05 ? 10.5 : 8.6); camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  let visible = true;
+  new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(stage);
+
+  const clock = new THREE.Clock(); let introT = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!visible) return;
+    const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+    introT = Math.min(1, introT + dt / 1.6);
+    const ease = 1 - Math.pow(1 - introT, 3);
+    if (!dragging) dragX *= .965;
+    const scrollTurn = Math.min(1, window.scrollY / 700) * .5;
+    const sway = reduced ? 0 : Math.sin(t * .5) * .16;
+    const targetY = -.38 + sway + pointerX * .35 + dragX + scrollTurn + (1 - ease) * -1.4;
+    const targetX = .1 + pointerY * .2 + dragY;
+    device3d.rotation.y += (targetY - device3d.rotation.y) * .08;
+    device3d.rotation.x += (targetX - device3d.rotation.x) * .08;
+    device3d.position.y = reduced ? 0 : Math.sin(t * .9) * .07;
+    device3d.scale.setScalar(.85 + .15 * ease);
+    beans.forEach(b => {
+      const u = b.userData; if (!reduced) u.a += u.sp * dt;
+      b.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(t * .6 + u.a * 2) * .15, Math.sin(u.a) * u.r * .55 - .4);
+      if (!reduced) { b.rotation.x += u.spin.x; b.rotation.y += u.spin.y; b.rotation.z += u.spin.z; }
+    });
+    if (!reduced && !dragging && now - lastSwitch > 3800) goToStage((to + 1) % SCREENS.length);
+    if (mix < 1) mix = Math.min(1, mix + dt * 2.5);
+    drawScreen();
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Pre-order form ---------- */
+const form = document.getElementById("po-form");
+const qtyOut = document.getElementById("po-qty");
+let qty = 1;
+document.getElementById("qty-minus").onclick = () => { qty = Math.max(1, qty - 1); qtyOut.textContent = qty; };
+document.getElementById("qty-plus").onclick = () => { qty = Math.min(10, qty + 1); qtyOut.textContent = qty; };
+
+let db = null, user = null, uid = null, lastOk = null;
+const statusEl = document.getElementById("po-status");
+
+function setErr(id, msg) {
+  document.getElementById("e-" + id).textContent = msg || "";
+  const f = document.getElementById("f-" + id); if (f) f.classList.toggle("invalid", !!msg);
+}
+function collect() {
+  return {
+    name: document.getElementById("po-name").value.trim(),
+    email: document.getElementById("po-email").value.trim(),
+    phone: (document.getElementById("po-cc").value + " " + document.getElementById("po-phone").value.trim()).trim(),
+    phoneDigits: document.getElementById("po-phone").value.replace(/\D/g, ""),
+    city: document.getElementById("po-city").value.trim(),
+    qty, note: document.getElementById("po-note").value.trim(),
+    consent: document.getElementById("po-consent").checked
+  };
+}
+function validate(d) {
+  let ok = true;
+  setErr("name", d.name.length >= 2 ? "" : (ok = false, t("e.name")));
+  setErr("email", /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email) ? "" : (ok = false, t("e.email")));
+  setErr("phone", d.phoneDigits.length >= 7 ? "" : (ok = false, t("e.phone")));
+  setErr("consent", d.consent ? "" : (ok = false, t("e.consent")));
+  return ok;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function showOk(d) {
+  lastOk = d;
+  statusEl.innerHTML = `<div class="status ok"><span>${esc(t("s.ok").replace("{name}", d.name.split(" ")[0]).replace("{email}", d.email))}</span><span style="color:var(--crema-dim);font-size:.88rem">${esc(t("s.again"))}</span></div>`;
+}
+function showFail(d) {
+  lastOk = null;
+  const text = `Pre-order: xBloom Screen\nName: ${d.name}\nEmail: ${d.email}\nPhone: ${d.phone}\nCity: ${d.city || "-"}\nQuantity: ${d.qty}\nNote: ${d.note || "-"}`;
+  statusEl.innerHTML = `<div class="status fail"><span>${esc(t("s.fail"))}</span><pre id="po-copytext">${esc(text)}</pre><button type="button" class="btn btn-ghost" id="po-copy">${esc(t("s.copy"))}</button></div>`;
+  document.getElementById("po-copy").onclick = e => copyText(text, e.currentTarget, t("s.copied"), document.getElementById("po-copytext"));
+}
+function copyText(text, btn, done, selectEl) {
+  const fallback = () => { if (selectEl) { const r = document.createRange(); r.selectNodeContents(selectEl); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } };
+  try { navigator.clipboard.writeText(text).then(() => { btn.textContent = done; }, fallback); } catch (e) { fallback(); }
+}
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const d = collect();
+  if (!validate(d)) { form.querySelector(".invalid input, .invalid select")?.focus(); return; }
+  const btn = document.getElementById("po-submit");
+  btn.disabled = true; btn.firstElementChild.textContent = t("f.sending");
+  const record = { name: d.name, email: d.email, phone: d.phone, city: d.city, qty: d.qty, note: d.note, lang, createdAt: Date.now() };
+  let saved = false;
+  try {
+    if (db && uid) {
+      await db.doc("preorders/" + uid).set(record);
+      saved = true;
+    } else if (PREORDER_ENDPOINT) {
+      const r = await fetch(PREORDER_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(record) });
+      saved = r.ok;
+    }
+  } catch (err) { saved = false; }
+  btn.disabled = false; btn.firstElementChild.textContent = t("f.submit");
+  saved ? showOk(d) : showFail(d);
+});
+
+/* Owner view of all pre-orders */
+let orders = [];
+function renderAdmin() {
+  const rows = document.getElementById("ad-rows");
+  document.getElementById("ad-count").textContent = orders.length;
+  document.getElementById("ad-empty").hidden = orders.length > 0;
+  const fmt = new Intl.DateTimeFormat(lang === "ar" ? "ar-AE" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+  rows.innerHTML = orders.map(o => `<tr><td>${o.createdAt ? esc(fmt.format(new Date(o.createdAt))) : ""}</td><td>${esc(o.name || "")}</td><td class="ltr">${esc(o.email || "")}</td><td class="ltr">${esc(o.phone || "")}</td><td>${esc(o.city || "")}</td><td class="ltr">${esc(o.qty || 1)}</td><td>${esc(o.note || "")}</td></tr>`).join("");
+}
+document.getElementById("ad-copy").onclick = e => {
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = ["date,name,email,phone,city,quantity,note,language"].concat(orders.map(o =>
+    [o.createdAt ? new Date(o.createdAt).toISOString() : "", o.name, o.email, o.phone, o.city, o.qty, o.note, o.lang].map(q).join(","))).join("\n");
+  copyText(csv, e.currentTarget, t("ad.copied"));
+};
+
+async function initStore() {
+  if (!window.claude || !window.claude.use) return;
+  try {
+    const [d, u] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    user = u;
+    if (d && u) {
+      const can = await u.can("data.write");
+      if (can !== false) { db = d; uid = await u.id(); }
+      if (db && uid) {
+        // Prefill a returning visitor's own pre-order
+        const mine = await db.doc("preorders/" + uid).get().catch(() => null);
+        const data = mine && (typeof mine.data === "function" ? mine.data() : mine.data);
+        if (data && data.email) {
+          document.getElementById("po-name").value = data.name || "";
+          document.getElementById("po-email").value = data.email || "";
+          document.getElementById("po-city").value = data.city || "";
+          document.getElementById("po-note").value = data.note || "";
+          qty = data.qty || 1; qtyOut.textContent = qty;
+        }
+      }
+    }
+    if (d && u && await u.isOwner()) {
+      document.getElementById("admin").hidden = false;
+      d.collection("preorders").onSnapshot(snap => {
+        orders = snap.docs.map(x => (typeof x.data === "function" ? x.data() : x.data)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        renderAdmin();
+      }, () => {});
+    }
+  } catch (e) { /* page works without the store */ }
+}
+
+/* ---------- Boot ---------- */
+paintIcons(document);
+applyLang(lang);
+initThree();
+initStore();
+</script>
